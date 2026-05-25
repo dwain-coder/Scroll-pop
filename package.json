@@ -1,0 +1,32 @@
+{
+  "name": "scrollpop",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Google-compliant scroll-triggered popup SaaS platform",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@11.1.1",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\" --ignore-path .gitignore",
+    "db:generate": "pnpm --filter api db:generate",
+    "db:migrate": "pnpm --filter api db:migrate",
+    "db:studio": "pnpm --filter api db:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "prettier": "^3.3.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": ["better-sqlite3"]
+  }
+}

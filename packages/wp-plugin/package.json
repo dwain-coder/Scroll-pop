@@ -1,0 +1,11 @@
+{
+  "name": "@scrollpop/wp-plugin",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "lint": "echo 'PHP linting not configured yet'",
+    "typecheck": "echo 'No TS in wp-plugin'",
+    "build": "echo 'No build step for wp-plugin'",
+    "test": "echo 'No tests yet'"
+  }
+}

@@ -1,0 +1,224 @@
+/**
+ * ScrollPop Cloudflare Worker
+ *
+ * Routes:
+ *   GET  /c/:publicKey  → Site config (cached in KV, 60s TTL)
+ *   POST /e             → Event ingest (forwards to Redis stream)
+ *
+ * IMPORTANT: This worker is a thin edge layer only.
+ * No business logic here — that lives in apps/api.
+ */
+
+import snippetCode from './p.txt';
+
+export interface Env {
+  SCROLLPOP_CONFIG: KVNamespace;
+  API_ORIGIN: string;
+  REDIS_URL: string;
+  REDIS_TOKEN: string;
+  INTERNAL_SECRET: string;
+}
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+
+    // Preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: CORS_HEADERS });
+    }
+
+    // GET /v1/:publicKey/p.js — serve the snippet
+    if (request.method === 'GET' && url.pathname.endsWith('/p.js')) {
+      return new Response(snippetCode, {
+        headers: {
+          'Content-Type': 'application/javascript',
+          ...CORS_HEADERS,
+          'Cache-Control': 'public, max-age=3600'
+        }
+      });
+    }
+
+    // GET /c/:publicKey — config endpoint
+    if (request.method === 'GET' && url.pathname.startsWith('/c/')) {
+      return handleConfig(request, env, ctx, url);
+    }
+
+    // POST /e — event ingest
+    if (request.method === 'POST' && url.pathname === '/e') {
+      return handleIngest(request, env, ctx);
+    }
+
+    return new Response('Not Found', { status: 404 });
+  },
+};
+
+// ─── Config Handler ───────────────────────────────────────────────────────────
+
+async function handleConfig(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  url: URL
+): Promise<Response> {
+  const publicKey = url.pathname.replace('/c/', '').split('/')[0];
+
+  if (!publicKey || publicKey.length < 8) {
+    return new Response(JSON.stringify({ error: 'Invalid public key' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    });
+  }
+
+  const kvKey = `config:${publicKey}`;
+
+  // Try KV cache first
+  const cached = await env.SCROLLPOP_CONFIG.get(kvKey, 'text');
+  if (cached) {
+    return new Response(cached, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=60',
+        'X-Cache': 'HIT',
+        ...CORS_HEADERS,
+      },
+    });
+  }
+
+  // Cache miss — fetch from origin API
+  const originUrl = `${env.API_ORIGIN}/api/v1/internal/config/${publicKey}`;
+  let originResponse: Response;
+
+  try {
+    originResponse = await fetch(originUrl, {
+      headers: {
+        'X-Internal-Secret': env.INTERNAL_SECRET,
+        'X-CF-Connecting-IP': request.headers.get('CF-Connecting-IP') ?? '',
+      },
+      cf: { cacheTtl: 0 }, // Don't use Cloudflare cache for origin calls
+    });
+  } catch (err) {
+    console.error('Origin fetch error:', err);
+    return new Response(JSON.stringify({ error: 'Config unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    });
+  }
+
+  if (!originResponse.ok) {
+    const status = originResponse.status === 404 ? 404 : 502;
+    return new Response(JSON.stringify({ error: 'Site not found' }), {
+      status,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    });
+  }
+
+  const configJson = await originResponse.text();
+
+  // Store in KV with 60s TTL (async — don't block response)
+  ctx.waitUntil(
+    env.SCROLLPOP_CONFIG.put(kvKey, configJson, { expirationTtl: 60 })
+  );
+
+  return new Response(configJson, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=60',
+      'X-Cache': 'MISS',
+      ...CORS_HEADERS,
+    },
+  });
+}
+
+// ─── Event Ingest Handler ─────────────────────────────────────────────────────
+
+interface RawEvent {
+  tenantId?: string;
+  siteId?: string;
+  campaignId?: string;
+  eventType?: string;
+  affiliateSlotId?: string;
+  visitorId?: string;
+  sessionId?: string;
+  device?: string;
+  pageUrl?: string;
+  referrer?: string;
+  metadata?: Record<string, unknown>;
+}
+
+async function handleIngest(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  let body: { events?: RawEvent[] };
+
+  try {
+    body = await request.json() as { events?: RawEvent[] };
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    });
+  }
+
+  const events = body.events;
+  if (!Array.isArray(events) || events.length === 0) {
+    return new Response(JSON.stringify({ error: 'No events provided' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    });
+  }
+
+  if (events.length > 50) {
+    return new Response(JSON.stringify({ error: 'Max 50 events per request' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    });
+  }
+
+  // Enrich with Cloudflare metadata (injected here at the edge)
+  const cf = (request as Request & { cf?: Record<string, string> }).cf;
+  const enrichedEvents = events.map((event) => ({
+    ...event,
+    ts: new Date().toISOString(),
+    country: cf?.['country'] ?? null,
+    colo: cf?.['colo'] ?? null,
+  }));
+
+  // Push to Redis stream (Upstash REST API)
+  // The API drains this stream and bulk-inserts to TimescaleDB
+  ctx.waitUntil(pushToRedisStream(env, enrichedEvents));
+
+  return new Response(JSON.stringify({ received: enrichedEvents.length }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+  });
+}
+
+async function pushToRedisStream(env: Env, events: unknown[]): Promise<void> {
+  if (!env.REDIS_URL || !env.REDIS_TOKEN) {
+    console.warn('Redis not configured — events dropped');
+    return;
+  }
+
+  try {
+    // Use Upstash Redis REST API for edge compat
+    await fetch(`${env.REDIS_URL}/xadd/scrollpop:events/*`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.REDIS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ events: JSON.stringify(events) }),
+    });
+  } catch (err) {
+    console.error('Redis stream write error:', err);
+  }
+}

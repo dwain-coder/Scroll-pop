@@ -1,0 +1,301 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/clerk-react';
+import { Refine } from '@refinedev/core';
+import { Layout } from './components/Layout';
+import { Dashboard } from './pages/Dashboard';
+import { Sites } from './pages/Sites';
+import { Campaigns } from './pages/Campaigns';
+import { CampaignWizard } from './pages/CampaignWizard';
+import { CampaignDetail } from './pages/CampaignDetail';
+import { CampaignDesign } from './pages/CampaignDesign';
+import { Analytics } from './pages/Analytics';
+import { Profile } from './pages/Profile';
+import { Billing } from './pages/Billing';
+import { Settings } from './pages/Settings';
+import { SignIn } from './pages/SignIn';
+import { SignUp } from './pages/SignUp';
+import { AdminPanel } from './pages/AdminPanel';
+
+const IS_DESKTOP_MODE = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
+
+const getCampaignDetailId = (path: string) => {
+  if (path.startsWith('/campaigns/detail/')) {
+    return path.replace('/campaigns/detail/', '');
+  }
+  return null;
+};
+
+const getCampaignDesignId = (path: string) => {
+  const m = path.match(/^\/campaigns\/([^/]+)\/design$/);
+  return m ? m[1] : null;
+};
+
+// Glazzed showcase pages
+import { SupportChat } from './pages/SupportChat';
+import { ImageGallery } from './pages/ImageGallery';
+import { CalendarPage } from './pages/CalendarPage';
+import { MessagesPage } from './pages/MessagesPage';
+import { FormsPage } from './pages/FormsPage';
+import { TablesPage } from './pages/TablesPage';
+
+import { createDataProvider } from './providers/dataProvider';
+import './index.css';
+
+// Clerk Publishable Key mapping
+const CLERK_PUBLISHABLE_KEY = ((import.meta as any).env.VITE_CLERK_PUBLISHABLE_KEY as string)
+  || 'pk_test_c2F2ZWQtbWFzdG9kb24tMjcuY2xlcmsuYWNjb3VudHMuZGV2JA';
+
+const IS_DEMO_MODE =
+  CLERK_PUBLISHABLE_KEY === 'pk_test_c2F2ZWQtbWFzdG9kb24tMjcuY2xlcmsuYWNjb3VudHMuZGV2JA' ||
+  !CLERK_PUBLISHABLE_KEY ||
+  ((import.meta as any).env.VITE_DEMO_MODE === 'true');
+
+const ClerkAppContent: React.FC = () => {
+  const { getToken, signOut } = useAuth();
+  
+  // Custom router state inside React
+  const [currentPath, setCurrentPath] = React.useState(window.location.pathname);
+
+  React.useEffect(() => {
+    const handlePopState = () => setCurrentPath(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigate = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/sign-in');
+  };
+
+  // Refine Providers
+  const dataProvider = React.useMemo(() => createDataProvider(getToken), [getToken]);
+  
+  // Render routing mapper
+  const renderRoute = () => {
+    // Auth routes
+    if (currentPath === '/sign-in') return <SignIn isDemo={false} />;
+    if (currentPath === '/sign-up') return <SignUp isDemo={false} />;
+
+    // Protected Admin routes
+    return (
+      <SignedIn>
+        <Refine
+          dataProvider={dataProvider}
+          options={{ syncWithLocation: false, warnWhenUnsavedChanges: false }}
+        >
+          <Layout
+            currentPath={currentPath}
+            onNavigate={navigate}
+            onLogout={handleLogout}
+            isDemo={false}
+          >
+            {currentPath === '/dashboard' || currentPath === '/' ? <Dashboard onNavigate={navigate} /> : null}
+            {currentPath === '/sites' ? <Sites onNavigate={navigate} /> : null}
+            {currentPath === '/campaigns' ? <Campaigns onNavigate={navigate} /> : null}
+            {currentPath === '/campaigns/new' ? <CampaignWizard onNavigate={navigate} /> : null}
+            {getCampaignDetailId(currentPath) ? <CampaignDetail campaignId={getCampaignDetailId(currentPath)!} onNavigate={navigate} /> : null}
+            {getCampaignDesignId(currentPath) ? <CampaignDesign campaignId={getCampaignDesignId(currentPath)!} onNavigate={navigate} /> : null}
+            {currentPath === '/analytics' ? <Analytics onNavigate={navigate} /> : null}
+            {currentPath === '/billing' ? <Billing onNavigate={navigate} /> : null}
+            {currentPath === '/settings' ? <Settings /> : null}
+            {currentPath === '/profile' ? <Profile isDemo={false} onNavigate={navigate} /> : null}
+            {currentPath === '/admin' ? <AdminPanel onNavigate={navigate} /> : null}
+
+            {/* Showcase routes */}
+            {currentPath === '/calendar' ? <CalendarPage /> : null}
+            {currentPath === '/gallery' ? <ImageGallery /> : null}
+            {currentPath === '/chat' ? <SupportChat /> : null}
+            {currentPath === '/messages' ? <MessagesPage /> : null}
+            {currentPath === '/forms' ? <FormsPage /> : null}
+            {currentPath === '/tables' ? <TablesPage /> : null}
+          </Layout>
+        </Refine>
+      </SignedIn>
+    );
+  };
+
+  return (
+    <>
+      <SignedOut>
+        {currentPath === '/sign-up' ? <SignUp isDemo={false} /> : <SignIn isDemo={false} />}
+      </SignedOut>
+      {renderRoute()}
+    </>
+  );
+};
+
+const DemoAppContent: React.FC = () => {
+  // Custom router state inside React
+  const [currentPath, setCurrentPath] = React.useState(window.location.pathname);
+  const [isAuthenticated, setIsAuthenticated] = React.useState(true); // Default authenticated for developer speed!
+
+  React.useEffect(() => {
+    const handlePopState = () => setCurrentPath(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigate = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path);
+  };
+
+  const handleLogout = async () => {
+    setIsAuthenticated(false);
+    navigate('/sign-in');
+  };
+
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+    navigate('/dashboard');
+  };
+
+  // Refine Providers
+  const dummyGetToken = React.useCallback(async () => 'demo_token', []);
+  const dataProvider = React.useMemo(() => createDataProvider(dummyGetToken), [dummyGetToken]);
+  
+  // Render routing mapper
+  const renderRoute = () => {
+    // Auth routes
+    if (currentPath === '/sign-in') return <SignIn isDemo={true} onLogin={handleLogin} />;
+    if (currentPath === '/sign-up') return <SignUp isDemo={true} onSignUp={handleLogin} />;
+
+    if (!isAuthenticated) {
+      return <SignIn isDemo={true} onLogin={handleLogin} />;
+    }
+
+    // Protected Admin routes
+    return (
+      <Refine
+        dataProvider={dataProvider}
+        options={{ syncWithLocation: false, warnWhenUnsavedChanges: false }}
+      >
+        <Layout
+          currentPath={currentPath}
+          onNavigate={navigate}
+          onLogout={handleLogout}
+          isDemo={true}
+        >
+          {currentPath === '/dashboard' || currentPath === '/' ? <Dashboard onNavigate={navigate} /> : null}
+          {currentPath === '/sites' ? <Sites onNavigate={navigate} /> : null}
+          {currentPath === '/campaigns' ? <Campaigns onNavigate={navigate} /> : null}
+          {currentPath === '/campaigns/new' ? <CampaignWizard onNavigate={navigate} /> : null}
+          {getCampaignDetailId(currentPath) ? <CampaignDetail campaignId={getCampaignDetailId(currentPath)!} onNavigate={navigate} /> : null}
+          {getCampaignDesignId(currentPath) ? <CampaignDesign campaignId={getCampaignDesignId(currentPath)!} onNavigate={navigate} /> : null}
+          {currentPath === '/analytics' ? <Analytics onNavigate={navigate} /> : null}
+          {currentPath === '/billing' ? <Billing onNavigate={navigate} /> : null}
+          {currentPath === '/settings' ? <Settings /> : null}
+          {currentPath === '/profile' ? <Profile isDemo={true} onNavigate={navigate} /> : null}
+          {currentPath === '/admin' ? <AdminPanel onNavigate={navigate} /> : null}
+
+          {/* Showcase routes */}
+          {currentPath === '/calendar' ? <CalendarPage /> : null}
+          {currentPath === '/gallery' ? <ImageGallery /> : null}
+          {currentPath === '/chat' ? <SupportChat /> : null}
+          {currentPath === '/messages' ? <MessagesPage /> : null}
+          {currentPath === '/forms' ? <FormsPage /> : null}
+          {currentPath === '/tables' ? <TablesPage /> : null}
+        </Layout>
+      </Refine>
+    );
+  };
+
+  return (
+    <>
+      {renderRoute()}
+    </>
+  );
+};
+
+const DesktopAppContent: React.FC = () => {
+  const getInitialDesktopPath = () => {
+    const hash = window.location.hash.replace('#', '');
+    return hash || '/dashboard';
+  };
+  const [currentPath, setCurrentPath] = React.useState(getInitialDesktopPath);
+  const [isAuthenticated, setIsAuthenticated] = React.useState(() => !!localStorage.getItem('desktop_token'));
+
+  React.useEffect(() => {
+    const handleHashChange = () => setCurrentPath(getInitialDesktopPath());
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const navigate = (path: string) => {
+    window.location.hash = path;
+    setCurrentPath(path);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('desktop_token');
+    localStorage.removeItem('desktop_user');
+    setIsAuthenticated(false);
+    navigate('/sign-in');
+  };
+
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+    navigate('/dashboard');
+  };
+
+  const desktopGetToken = React.useCallback(async () => localStorage.getItem('desktop_token'), []);
+  const dataProvider = React.useMemo(() => createDataProvider(desktopGetToken), [desktopGetToken]);
+
+  const renderRoute = () => {
+    if (currentPath === '/sign-in') return <SignIn isDemo={false} isDesktop={true} onLogin={handleLogin} />;
+    if (currentPath === '/sign-up') return <SignIn isDemo={false} isDesktop={true} onLogin={handleLogin} />;
+
+    if (!isAuthenticated) return <SignIn isDemo={false} isDesktop={true} onLogin={handleLogin} />;
+
+    return (
+      <Refine dataProvider={dataProvider} options={{ syncWithLocation: false, warnWhenUnsavedChanges: false }}>
+        <Layout currentPath={currentPath} onNavigate={navigate} onLogout={handleLogout} isDemo={true}>
+          {currentPath === '/dashboard' || currentPath === '/' ? <Dashboard onNavigate={navigate} /> : null}
+          {currentPath === '/sites' ? <Sites /> : null}
+          {currentPath === '/campaigns' ? <Campaigns onNavigate={navigate} /> : null}
+          {currentPath === '/campaigns/new' ? <CampaignWizard onNavigate={navigate} /> : null}
+          {getCampaignDetailId(currentPath) ? <CampaignDetail campaignId={getCampaignDetailId(currentPath)!} onNavigate={navigate} /> : null}
+          {getCampaignDesignId(currentPath) ? <CampaignDesign campaignId={getCampaignDesignId(currentPath)!} onNavigate={navigate} /> : null}
+          {currentPath === '/analytics' ? <Analytics onNavigate={navigate} /> : null}
+          {currentPath === '/billing' ? <Billing /> : null}
+          {currentPath === '/settings' ? <Settings /> : null}
+          {currentPath === '/profile' ? <Profile isDemo={false} isDesktop={true} onNavigate={navigate} /> : null}
+          {currentPath === '/calendar' ? <CalendarPage /> : null}
+          {currentPath === '/gallery' ? <ImageGallery /> : null}
+          {currentPath === '/chat' ? <SupportChat /> : null}
+          {currentPath === '/messages' ? <MessagesPage /> : null}
+          {currentPath === '/forms' ? <FormsPage /> : null}
+          {currentPath === '/tables' ? <TablesPage /> : null}
+        </Layout>
+      </Refine>
+    );
+  };
+
+  return <>{renderRoute()}</>;
+};
+
+const Root: React.FC = () => {
+  if (IS_DESKTOP_MODE) {
+    return <DesktopAppContent />;
+  }
+  if (IS_DEMO_MODE) {
+    return <DemoAppContent />;
+  }
+  return (
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} signInUrl="/sign-in" signUpUrl="/sign-up">
+      <ClerkAppContent />
+    </ClerkProvider>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <Root />
+  </React.StrictMode>
+);

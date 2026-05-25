@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "API (Fastify · port 3001)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@scrollpop/api", "dev"],
+      "port": 3001
+    },
+    {
+      "name": "Dashboard (Vite · port 5173)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@scrollpop/dashboard", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "Worker (Wrangler · port 8787)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@scrollpop/worker", "dev"],
+      "port": 8787
+    },
+    {
+      "name": "Snippet (esbuild watch)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@scrollpop/snippet", "dev"],
+      "port": null
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+import type { FastifyPluginAsync } from 'fastify';
+import { DesignConfigSchema, AffiliateSlotSchema } from '@scrollpop/shared';
+import { z } from 'zod';
+import { db } from '../db/client.js';
+import { designs, campaigns } from '../db/schema.js';
+import { eq, and, isNull } from 'drizzle-orm';
+
+const UpsertDesignBody = z.object({
+  kind: z.enum(['modal', 'slide_in', 'banner', 'bar', 'fullscreen']).optional(),
+  config: DesignConfigSchema.partial().optional(),
+  affiliateSlots: z.array(AffiliateSlotSchema).max(3).optional(),
+});
+
+export const designRoutes: FastifyPluginAsync = async (fastify) => {
+  // GET /api/v1/campaigns/:id/design
+  fastify.get<{ Params: { id: string } }>('/campaigns/:id/design', async (request, reply) => {
+    // Verify campaign belongs to tenant
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(
+        eq(campaigns.id, request.params.id),
+        eq(campaigns.tenantId, request.tenantId),
+        isNull(campaigns.deletedAt)
+      ),
+    });
+
+    if (!campaign) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    const design = await db.query.designs.findFirst({
+      where: and(
+        eq(designs.campaignId, request.params.id),
+        eq(designs.tenantId, request.tenantId)
+      ),
+    });
+
+    if (!design) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Design not found' } });
+    }
+
+    return reply.send({ data: design });
+  });
+
+  // POST & PUT /api/v1/campaigns/:id/design (upsert)
+  const handleUpsert = async (request: any, reply: any) => {
+    const rawBody = request.body as any;
+    if (rawBody && rawBody.affiliate_slots && !rawBody.affiliateSlots) {
+      rawBody.affiliateSlots = rawBody.affiliate_slots;
+    }
+    const body = UpsertDesignBody.parse(rawBody);
+
+    // Verify campaign belongs to tenant
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(
+        eq(campaigns.id, request.params.id),
+        eq(campaigns.tenantId, request.tenantId),
+        isNull(campaigns.deletedAt)
+      ),
+    });
+
+    if (!campaign) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    const existing = await db.query.designs.findFirst({
+      where: and(
+        eq(designs.campaignId, request.params.id),
+        eq(designs.tenantId, request.tenantId)
+      ),
+    });
+
+    if (existing) {
+      // Update
+      const [updated] = await db
+        .update(designs)
+        .set({
+          kind: body.kind ?? existing.kind,
+          config: body.config ? { ...(existing.config as object), ...body.config } : existing.config,
+          affiliateSlots: body.affiliateSlots ?? existing.affiliateSlots,
+          updatedAt: new Date(),
+        })
+        .where(eq(designs.id, existing.id))
+        .returning();
+
+      return reply.send({ data: updated });
+    } else {
+      // Create
+      const [created] = await db
+        .insert(designs)
+        .values({
+          campaignId: request.params.id,
+          tenantId: request.tenantId,
+          kind: body.kind ?? 'modal',
+          config: body.config ?? {},
+          affiliateSlots: body.affiliateSlots ?? [],
+        })
+        .returning();
+
+      return reply.code(201).send({ data: created });
+    }
+  };
+
+  fastify.put<{ Params: { id: string } }>('/campaigns/:id/design', handleUpsert);
+  fastify.post<{ Params: { id: string } }>('/campaigns/:id/design', handleUpsert);
+};

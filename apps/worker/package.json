@@ -1,0 +1,24 @@
+{
+  "name": "@scrollpop/worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "copy-snippet": "node -e \"require('fs').copyFileSync('../../packages/snippet/dist/p.js', 'src/p.txt')\"",
+    "dev": "pnpm copy-snippet && wrangler dev",
+    "build": "pnpm copy-snippet && wrangler deploy --dry-run --outdir dist",
+    "deploy": "pnpm copy-snippet && wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@scrollpop/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240925.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "wrangler": "^3.78.0"
+  }
+}

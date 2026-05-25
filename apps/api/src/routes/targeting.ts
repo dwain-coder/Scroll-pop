@@ -1,0 +1,107 @@
+import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
+import { db } from '../db/client.js';
+import { targetingRules, campaigns } from '../db/schema.js';
+import { eq, and, isNull } from 'drizzle-orm';
+
+const CreateTargetingBody = z.object({
+  kind: z.enum(['url_exact', 'url_contains', 'url_regex', 'device', 'returning_visitor']),
+  operator: z.enum(['include', 'exclude']).default('include'),
+  value: z.record(z.unknown()),
+});
+
+const UpdateTargetingBody = z.object({
+  operator: z.enum(['include', 'exclude']).optional(),
+  value: z.record(z.unknown()).optional(),
+});
+
+export const targetingRoutes: FastifyPluginAsync = async (fastify) => {
+  // GET /api/v1/campaigns/:id/targeting
+  fastify.get<{ Params: { id: string } }>('/campaigns/:id/targeting', async (request, reply) => {
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(
+        eq(campaigns.id, request.params.id),
+        eq(campaigns.tenantId, request.tenantId),
+        isNull(campaigns.deletedAt)
+      ),
+    });
+
+    if (!campaign) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    const rows = await db.query.targetingRules.findMany({
+      where: and(
+        eq(targetingRules.campaignId, request.params.id),
+        eq(targetingRules.tenantId, request.tenantId)
+      ),
+    });
+
+    return reply.send({ data: rows });
+  });
+
+  // POST /api/v1/campaigns/:id/targeting
+  fastify.post<{ Params: { id: string } }>('/campaigns/:id/targeting', async (request, reply) => {
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(
+        eq(campaigns.id, request.params.id),
+        eq(campaigns.tenantId, request.tenantId),
+        isNull(campaigns.deletedAt)
+      ),
+    });
+
+    if (!campaign) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    const body = CreateTargetingBody.parse(request.body);
+
+    const [rule] = await db
+      .insert(targetingRules)
+      .values({
+        campaignId: request.params.id,
+        tenantId: request.tenantId,
+        kind: body.kind,
+        operator: body.operator,
+        value: body.value,
+      })
+      .returning();
+
+    return reply.code(201).send({ data: rule });
+  });
+
+  // PATCH /api/v1/targeting/:id
+  fastify.patch<{ Params: { id: string } }>('/targeting/:id', async (request, reply) => {
+    const body = UpdateTargetingBody.parse(request.body);
+
+    const [updated] = await db
+      .update(targetingRules)
+      .set({
+        ...(body.operator !== undefined ? { operator: body.operator } : {}),
+        ...(body.value !== undefined ? { value: body.value } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(targetingRules.id, request.params.id), eq(targetingRules.tenantId, request.tenantId)))
+      .returning();
+
+    if (!updated) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Targeting rule not found' } });
+    }
+
+    return reply.send({ data: updated });
+  });
+
+  // DELETE /api/v1/targeting/:id
+  fastify.delete<{ Params: { id: string } }>('/targeting/:id', async (request, reply) => {
+    const result = await db
+      .delete(targetingRules)
+      .where(and(eq(targetingRules.id, request.params.id), eq(targetingRules.tenantId, request.tenantId)))
+      .returning();
+
+    if (result.length === 0) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Targeting rule not found' } });
+    }
+
+    return reply.code(204).send();
+  });
+};
