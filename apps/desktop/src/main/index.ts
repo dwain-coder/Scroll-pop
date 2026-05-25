@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { autoUpdater } from 'electron-updater';
-import { startServer } from '../server';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -48,13 +47,6 @@ function createWindow() {
 
 async function bootstrap() {
   await app.whenReady();
-
-  try {
-    await startServer();
-    console.log('[desktop] Local server started on port 3010');
-  } catch (err) {
-    console.error('[desktop] Failed to start local server:', err);
-  }
 
   createWindow();
 

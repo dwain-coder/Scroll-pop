@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   isDesktop: true,
-  getLocalApiUrl: () => 'http://127.0.0.1:3010',
+  getLocalApiUrl: () => (import.meta as any).env.VITE_API_URL || 'https://scroll-pop.onrender.com',
   getVersion: () => ipcRenderer.invoke('app:version'),
   checkForUpdates: () => ipcRenderer.invoke('updater:check'),
   onUpdateAvailable: (cb: (info: unknown) => void) => ipcRenderer.on('update-available', (_e, info) => cb(info)),

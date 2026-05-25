@@ -11,3 +11,5 @@ coverage/
 *.log
 .wrangler/
 .dev.vars
+
+apps/desktop/release/

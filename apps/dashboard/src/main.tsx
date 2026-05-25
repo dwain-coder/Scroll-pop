@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, useAuth, useClerk } from '@clerk/clerk-react';
 import { Refine } from '@refinedev/core';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
@@ -234,12 +234,14 @@ const DesktopAppContent: React.FC = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('desktop_token');
-    localStorage.removeItem('desktop_user');
     setIsAuthenticated(false);
     navigate('/sign-in');
   };
-
+  
   const handleLogin = () => {
+    // Save the internal secret to auth bypass the cloud
+    const secret = (import.meta as any).env.VITE_INTERNAL_SECRET || 'change_me_in_production_32_chars_min';
+    localStorage.setItem('desktop_token', secret);
     setIsAuthenticated(true);
     navigate('/dashboard');
   };
@@ -248,10 +250,10 @@ const DesktopAppContent: React.FC = () => {
   const dataProvider = React.useMemo(() => createDataProvider(desktopGetToken), [desktopGetToken]);
 
   const renderRoute = () => {
-    if (currentPath === '/sign-in') return <SignIn isDemo={false} isDesktop={true} onLogin={handleLogin} />;
-    if (currentPath === '/sign-up') return <SignIn isDemo={false} isDesktop={true} onLogin={handleLogin} />;
+    if (currentPath === '/sign-in') return <SignIn isDemo={true} isDesktop={true} onLogin={handleLogin} />;
+    if (currentPath === '/sign-up') return <SignIn isDemo={true} isDesktop={true} onLogin={handleLogin} />;
 
-    if (!isAuthenticated) return <SignIn isDemo={false} isDesktop={true} onLogin={handleLogin} />;
+    if (!isAuthenticated) return <SignIn isDemo={true} isDesktop={true} onLogin={handleLogin} />;
 
     return (
       <Refine dataProvider={dataProvider} options={{ syncWithLocation: false, warnWhenUnsavedChanges: false }}>

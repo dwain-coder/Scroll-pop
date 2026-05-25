@@ -2,7 +2,7 @@
 const electron = require("electron");
 electron.contextBridge.exposeInMainWorld("electronAPI", {
   isDesktop: true,
-  getLocalApiUrl: () => "http://127.0.0.1:3010",
+  getLocalApiUrl: () => "https://scroll-pop.onrender.com",
   getVersion: () => electron.ipcRenderer.invoke("app:version"),
   checkForUpdates: () => electron.ipcRenderer.invoke("updater:check"),
   onUpdateAvailable: (cb) => electron.ipcRenderer.on("update-available", (_e, info) => cb(info)),

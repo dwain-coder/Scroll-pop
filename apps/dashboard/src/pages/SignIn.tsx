@@ -228,18 +228,18 @@ export const SignIn: React.FC<SignInProps> = ({ isDemo = false, isDesktop = fals
                   </div>
                 </>
               )}
-              {(!isDesktop && !isDemo) ? (
+              {(!isDemo) ? (
                 <ClerkSignIn
-                  signUpUrl="/sign-up"
-                  afterSignInUrl="/dashboard"
+                  routing="virtual"
                   appearance={{
                     elements: {
                       card: 'bg-slate-900/80 backdrop-blur border border-slate-800 shadow-xl rounded-2xl p-6 text-slate-200',
                       headerTitle: 'text-slate-100 font-bold',
                       headerSubtitle: 'text-slate-400',
-                      socialButtonsBlockButton: 'hidden',
-                      socialButtonsProviderIcon: 'hidden',
-                      socialButtonsBlockButtonText: 'hidden',
+                      socialButtonsBlockButton: isDesktop ? 'hidden' : '',
+                      socialButtonsProviderIcon: isDesktop ? 'hidden' : '',
+                      socialButtonsBlockButtonText: isDesktop ? 'hidden' : '',
+                      dividerRow: isDesktop ? 'hidden' : '',
                       formButtonPrimary: 'bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-lg transition shadow-md shadow-indigo-500/20',
                       footerActionLink: 'text-indigo-400 hover:text-indigo-300 font-medium transition',
                       formFieldInput: 'bg-slate-950 border border-slate-800 focus:border-indigo-500 text-slate-200 rounded-lg',
