@@ -129,4 +129,21 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ data: withCtr });
     }
   );
+
+  // GET /api/v1/analytics/recent — tenant-level recent events log
+  fastify.get('/analytics/recent', async (request, reply) => {
+    const recentEvents = await db
+      .select({
+        ts: events.ts,
+        eventType: events.eventType,
+        country: events.country,
+        campaignId: events.campaignId,
+      })
+      .from(events)
+      .where(eq(events.tenantId, request.tenantId))
+      .orderBy(sql`${events.ts} desc`)
+      .limit(10);
+
+    return reply.send({ data: recentEvents });
+  });
 };

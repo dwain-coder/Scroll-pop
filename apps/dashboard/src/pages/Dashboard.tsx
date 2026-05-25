@@ -21,14 +21,71 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     url: `${apiUrl}/analytics/campaigns`,
     method: 'get',
   });
+  const { data: recentEventsResult } = useCustom({
+    url: `${apiUrl}/analytics/recent`,
+    method: 'get',
+  });
 
   const overview = (overviewResult as any)?.data ?? null;
+  const recentEvents = (recentEventsResult as any)?.data ?? [];
+
   const campaignStats = React.useMemo<Record<string, any>>(() => {
     const map: Record<string, any> = {};
     const list = Array.isArray((statsResult as any)?.data) ? (statsResult as any).data : [];
     for (const s of list) map[s.campaignId] = s;
     return map;
   }, [statsResult]);
+
+  const recentEventsList = React.useMemo(() => {
+    const list = Array.isArray(recentEvents) ? recentEvents : [];
+    if (list.length === 0) {
+      return [{ text: 'No edge events received yet.', time: '—', type: 'sys' }];
+    }
+    
+    return list.map((evt: any) => {
+      let text = '';
+      let type = 'sys';
+      
+      const campaignName = campaignsData?.data.find((c: any) => c.id === evt.campaignId)?.name ?? 'Campaign';
+      
+      if (evt.eventType === 'impression') {
+        text = `Impression registered for "${campaignName}" from ${evt.country || 'Global'}`;
+        type = 'imp';
+      } else if (evt.eventType === 'click') {
+        text = `CTA clicked on "${campaignName}"`;
+        type = 'clk';
+      } else if (evt.eventType === 'view') {
+        text = `Popup viewed for "${campaignName}"`;
+        type = 'imp';
+      } else if (evt.eventType === 'dismiss') {
+        text = `Popup dismissed for "${campaignName}"`;
+        type = 'sys';
+      } else if (evt.eventType === 'conversion') {
+        text = `Conversion logged for "${campaignName}"`;
+        type = 'clk';
+      } else {
+        text = `Event: ${evt.eventType}`;
+      }
+
+      // Format time
+      let timeStr = '';
+      try {
+        const diffMs = Date.now() - new Date(evt.ts).getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        if (diffMins < 1) timeStr = 'Just now';
+        else if (diffMins < 60) timeStr = `${diffMins}m ago`;
+        else {
+          const diffHrs = Math.floor(diffMins / 60);
+          if (diffHrs < 24) timeStr = `${diffHrs}h ago`;
+          else timeStr = new Date(evt.ts).toLocaleDateString();
+        }
+      } catch {
+        timeStr = 'Recent';
+      }
+
+      return { text, time: timeStr, type };
+    });
+  }, [recentEvents, campaignsData]);
 
   // MVP Telemetry Metrics (Mapped to live postgres data!)
   const stats = [
@@ -180,12 +237,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           <h3 className="font-extrabold text-lg text-slate-200">Edge Activity Log</h3>
           
           <div className="space-y-4">
-            {[
-              { text: 'Impression registered from US', time: '2 mins ago', type: 'imp' },
-              { text: 'Affiliate slot CTA clicked (Growth Tier)', time: '8 mins ago', type: 'clk' },
-              { text: 'Config fetched for site.com', time: '14 mins ago', type: 'cfg' },
-              { text: 'Campaign "Summer Sale" activated', time: '1 hr ago', type: 'sys' },
-            ].map((log, idx) => (
+            {recentEventsList.map((log, idx) => (
               <div key={idx} className="flex items-start justify-between gap-4 text-xs font-semibold">
                 <div className="flex gap-3">
                   <span className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${
