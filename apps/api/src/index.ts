@@ -56,8 +56,8 @@ async function bootstrap() {
   // CORS
   const productionOrigins = [
     process.env['DASHBOARD_URL'],
-    'https://app.scrollpop.io',
-    'https://scrollpop.io',
+    'https://dashboard.scrollpop.online',
+    'https://scrollpop-dashboard.pages.dev',
   ].filter((o): o is string => Boolean(o));
   await app.register(cors, {
     origin: process.env['NODE_ENV'] === 'production'
