@@ -444,10 +444,11 @@ export const Layout: React.FC<LayoutProps> = ({
           {/* Center: links — internal app pages */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             {[
-              { label: 'Docs',    path: '/docs'    },
-              { label: 'Status',  path: '/status'  },
-              { label: 'Privacy', path: '/privacy' },
-              { label: 'Terms',   path: '/terms'   },
+              { label: 'Docs',     path: '/docs'     },
+              { label: 'Status',   path: '/status'   },
+              { label: 'Privacy',  path: '/privacy'  },
+              { label: 'Terms',    path: '/terms'    },
+              { label: 'Licenses', path: '/licenses' },
             ].map(({ label, path }) => (
               <button
                 key={label}

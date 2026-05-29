@@ -13,3 +13,10 @@ coverage/
 .dev.vars
 
 apps/desktop/release/
+
+# Secrets — never commit these
+client_secret_*.json
+*client_secret*.json
+env neon pswd
+*.credentials.json
+stitch_file_based_build_system/
