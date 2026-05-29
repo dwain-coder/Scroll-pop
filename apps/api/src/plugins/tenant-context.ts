@@ -3,7 +3,7 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { db } from '../db/client.js';
 import { tenants, users, tenantMembers } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
-import { getAuth } from '@clerk/fastify';
+import { getAuth, clerkClient } from '@clerk/fastify';
 
 // Extend FastifyRequest with tenant context
 declare module 'fastify' {
@@ -135,54 +135,118 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     const clerkUserId = auth.userId;
     const clerkOrgId = auth.orgId;
 
-    if (!clerkOrgId) {
-      return reply.code(403).send({
-        error: {
-          code: 'NO_ORG',
-          message: 'No organization selected. Please select an organization.',
-        },
+    // ─── Org-scoped path (Clerk Organization active) ──────────────────────────
+    if (clerkOrgId) {
+      const tenant = await db.query.tenants.findFirst({
+        where: and(eq(tenants.clerkOrgId, clerkOrgId), isNull(tenants.deletedAt)),
       });
+      if (!tenant) {
+        return reply.code(403).send({
+          error: { code: 'TENANT_NOT_FOUND', message: 'Tenant not found' },
+        });
+      }
+      const user = await db.query.users.findFirst({
+        where: eq(users.clerkUserId, clerkUserId),
+      });
+      if (!user) {
+        return reply.code(403).send({
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+        });
+      }
+      const membership = await db.query.tenantMembers.findFirst({
+        where: and(
+          eq(tenantMembers.tenantId, tenant.id),
+          eq(tenantMembers.userId, user.id)
+        ),
+      });
+      if (!membership) {
+        return reply.code(403).send({
+          error: { code: 'NOT_A_MEMBER', message: 'Not a member of this organization' },
+        });
+      }
+      request.tenantId = tenant.id;
+      request.userId = user.id;
+      request.memberRole = membership.role;
+      return;
     }
 
-    // Resolve tenant
-    const tenant = await db.query.tenants.findFirst({
-      where: and(eq(tenants.clerkOrgId, clerkOrgId), isNull(tenants.deletedAt)),
-    });
+    // ─── Personal-account path (no Clerk org) ─────────────────────────────────
+    // Each Clerk user gets their own auto-provisioned tenant keyed by user id.
+    const personalOrgKey = `personal_${clerkUserId}`;
 
-    if (!tenant) {
-      return reply.code(403).send({
-        error: { code: 'TENANT_NOT_FOUND', message: 'Tenant not found' },
-      });
-    }
-
-    // Resolve user
-    const user = await db.query.users.findFirst({
+    let user = await db.query.users.findFirst({
       where: eq(users.clerkUserId, clerkUserId),
     });
+    let tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.clerkOrgId, personalOrgKey),
+    });
 
-    if (!user) {
-      return reply.code(403).send({
-        error: { code: 'USER_NOT_FOUND', message: 'User not found' },
-      });
+    if (!user || !tenant) {
+      // First request for this user — fetch identity from Clerk to seed rows.
+      const clerkUser = await clerkClient.users.getUser(clerkUserId);
+      const email =
+        clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
+          ?.emailAddress ??
+        clerkUser.emailAddresses[0]?.emailAddress ??
+        `${clerkUserId}@users.scrollpop.local`;
+      const name =
+        [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null;
+
+      if (!user) {
+        const inserted = await db
+          .insert(users)
+          .values({ clerkUserId, email, name })
+          .onConflictDoUpdate({
+            target: users.clerkUserId,
+            set: { email, name, updatedAt: new Date() },
+          })
+          .returning();
+        user = inserted[0];
+      }
+
+      if (!tenant) {
+        const inserted = await db
+          .insert(tenants)
+          .values({ clerkOrgId: personalOrgKey, name: name ?? email, plan: 'free', monthlyViewLimit: 1000 })
+          .onConflictDoNothing()
+          .returning();
+        tenant =
+          inserted[0] ??
+          (await db.query.tenants.findFirst({
+            where: eq(tenants.clerkOrgId, personalOrgKey),
+          }));
+      }
     }
 
-    // Resolve membership + role
-    const membership = await db.query.tenantMembers.findFirst({
+    if (!user || !tenant) {
+      throw new Error('Failed to provision personal tenant');
+    }
+
+    let membership = await db.query.tenantMembers.findFirst({
       where: and(
         eq(tenantMembers.tenantId, tenant.id),
         eq(tenantMembers.userId, user.id)
       ),
     });
-
     if (!membership) {
-      return reply.code(403).send({
-        error: { code: 'NOT_A_MEMBER', message: 'Not a member of this organization' },
-      });
+      const inserted = await db
+        .insert(tenantMembers)
+        .values({ tenantId: tenant.id, userId: user.id, role: 'owner' })
+        .onConflictDoNothing()
+        .returning();
+      membership =
+        inserted[0] ??
+        (await db.query.tenantMembers.findFirst({
+          where: and(
+            eq(tenantMembers.tenantId, tenant.id),
+            eq(tenantMembers.userId, user.id)
+          ),
+        }));
     }
 
     request.tenantId = tenant.id;
     request.userId = user.id;
-    request.memberRole = membership.role;
+    request.memberRole = membership?.role ?? 'owner';
   });
 };
 
