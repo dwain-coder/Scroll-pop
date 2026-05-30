@@ -236,14 +236,14 @@ scrollpop/
 
 ## 5. Infrastructure & Services
 
-### Production URLs (Live as of May 29, 2026)
+### Production URLs (Live as of May 30, 2026)
 | Service | URL | Host |
 |---|---|---|
-| API | https://scroll-pop.onrender.com | Render.com |
+| API | https://scroll-pop.onrender.com | Render.com **Pro ($25/mo)** — always warm |
 | Dashboard | https://dashboard.scrollpop.online | Cloudflare Pages |
 | Dashboard (CF subdomain) | https://scrollpop-dashboard.pages.dev | Cloudflare Pages (alias) |
-| Snippet CDN | https://scroll-pop.onrender.com (temp) | Render — move to R2 in v2 |
-| Edge Worker | https://scrollpop.workers.dev (pending) | Cloudflare Workers |
+| Snippet CDN | **https://cdn.scrollpop.online** | Cloudflare Worker custom domain ✅ live |
+| Edge / Config / Events | **https://edge.scrollpop.online** | Cloudflare Worker custom domain ✅ live |
 | Neon DB | ep-autumn-frost-aoudjxlw.c-2.ap-southeast-1.aws.neon.tech | Neon (ap-southeast-1) |
 | Clerk Auth | https://clerk.scrollpop.online | Clerk (production instance) |
 | Clerk Accounts Portal | https://accounts.scrollpop.online | Clerk |
@@ -947,71 +947,101 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 ## 22. What's Built vs Not Built
 
 ### ✅ Built & Working
+
+#### Infrastructure
+- **Render Pro ($25/mo)** — API always warm, zero cold starts; analytics event forwarding
+  is now reliable end-to-end (no more silently dropped events on cold start)
+- **`cdn.scrollpop.online`** — Cloudflare Worker custom domain live; serves the snippet
+  (`GET /v1/:key/p.js` → 200, bundle 9.6 KB gzipped)
+- **`edge.scrollpop.online`** — Cloudflare Worker custom domain live; serves site config
+  (`GET /c/:key`) and accepts event ingest (`POST /e`)
+- **`dashboard.scrollpop.online`** — Cloudflare Pages, auto-deploys from `Dw-Dwain/Scroll-pop`
+- **`scroll-pop.onrender.com`** — Fastify API, auto-deploys from `dwain-coder/Scroll-pop`
+- Two-repo deploy split: `dwain-coder` holds Render secrets (API deploy); `Dw-Dwain` holds
+  Cloudflare secrets (Worker deploy). CI skips Worker deploy silently on the repo without the token.
+
+#### Auth & Accounts
 - Auth via Clerk — **personal-account model**: each signed-in user gets an auto-provisioned
-  tenant (`personal_<clerkUserId>`) on first request; the org-based multi-tenant path is
-  preserved in `tenant-context.ts` for later but no org-creation UI exists yet
+  tenant (`personal_<clerkUserId>`) on first request; org-based multi-tenant path preserved
+  in `tenant-context.ts` for later but no org-creation UI exists yet
 - Email/password sign-up (real Clerk flow: create → email verification code → active session)
-  plus Google/GitHub OAuth, in both SignIn and SignUp pages
+  plus Google/GitHub OAuth in both SignIn and SignUp pages
+- Profile name saved to Clerk via `user.update()`; password/2FA routed to Clerk's own
+  account-security dialog
+
+#### Sites & Campaigns
 - Sites CRUD with platform picker
-- Shopify OAuth 2.0 + Script Tag injection + GDPR webhooks
-- WordPress plugin + dashboard verification (plugin `.zip` served from GitHub release asset:
-  `github.com/dwain-coder/Scroll-pop/releases/latest/download/scrollpop-wp.zip`)
-- Campaign wizard (3-step: basics, triggers, targeting)
+- Shopify OAuth 2.0 + Script Tag injection + GDPR webhooks (code-complete; needs Shopify
+  Partner app `redirect_uri` to be registered at `scroll-pop.onrender.com/api/v1/shopify/callback`)
+- WordPress plugin download from GitHub release asset (`scrollpop-wp.zip`, forward-slash
+  ZIP paths so Linux hosts extract correctly)
+- Campaign wizard **3-step flow** (Details → Design → Launch); triggers/frequency/targeting
+  configured in the Design editor's Triggers tab and saved on launch
+- Campaign auto-activates on launch (was left as `draft` before)
+- Campaign editor loads saved design reliably (fixed race condition where 1.5s fallback
+  beat Render's response time and default styling was shown)
+- Publish saves design AND preserves affiliate slots (was zeroing them on every save)
+- After Publish → navigates back to campaigns list
+- Template picker loads the full design (all steps: teaser/main/success)
 - Full trigger types: scroll %, dwell time, inactivity, exit-intent mouse, click
 - Full targeting types: URL exact/contains/regex, device, returning visitor
-- Include/exclude targeting operators
-- Frequency rules (session/day/visitor/always)
-- Design builder (visual block editor)
-- All 9 popup types
-- Affiliate slots with weighted rotation, click tracking, coupon codes
-- Analytics events (impression/view/click/dismiss/conversion)
-- Analytics page with charts + per-campaign table + CSV export
-- Billing pages (plans, Stripe checkout, portal)
-- Stripe webhook handling (subscription lifecycle)
-- Settings page (feature flags, theme, display prefs)
-- Profile page (API key, avatar)
-- OpsCenter live SSE stream (beta)
-- Experiments UI (beta placeholder)
-- Journeys UI (beta placeholder)
-- CI/CD pipeline (GitHub Actions) — deploys API → Render from `dwain-coder/Scroll-pop`;
-  pushing CI/workflow changes needs a `workflow`-scope PAT
-- Multi-page docs with sidebar nav
-- License page (verbatim OSS licenses)
-- Terms, Privacy, Status pages
-- VITE_API_URL routing fix (production-ready)
-- CORS: allowlist (`DASHBOARD_URL`, `dashboard.scrollpop.online`, `scrollpop-dashboard.pages.dev`)
-  plus a regex allowing Cloudflare Pages preview origins (`<hash>.scrollpop-dashboard.pages.dev`)
-- All in-code infra references repointed from the placeholder `scrollpop.io` to the owned
-  `scrollpop.online` domain (snippet embed, edge/cdn URLs, Shopify/WP/docs)
+- Frequency rules (session/day/visitor/always) configurable in Design editor
+- Settings → Save org name persists via `PATCH /tenants/:id`
+- Settings → Pause all campaigns calls `POST /campaigns/:id/pause` for each active campaign
+
+#### Snippet & Live Rendering
+- **WYSIWYG element renderer**: snippet renders `config.steps.main.elements` (heading/text/
+  button/input/image/shape/divider/badge/close) using the editor's coordinate system
+  (absolute %-positioned, colors, fonts, z-index). Flat-field fallback kept for legacy/gamified.
+- Close button: click opens `el.href`/slot URL in new tab; `visibilitychange` auto-dismisses
+  and resets frequency caps when user returns so triggers re-fire
+- CORS: methods `GET/POST/PUT/PATCH/DELETE/OPTIONS` explicitly set; dashboard origins +
+  Pages preview subdomain pattern allowed
+- Analytics event pipeline: snippet → edge Worker → API `/e` → DB (Worker now has 10s
+  timeout on forwarding so events fail fast instead of hanging)
+- `sendBeacon` / `fetch({keepalive:true})` for all event beaconing
+
+#### Design & UI
+- All in-code infra references repointed from placeholder `scrollpop.io` to owned `scrollpop.online`
+- CI/CD pipeline (GitHub Actions) — Worker deploy gracefully skips on repos without the CF token
+- Multi-page docs, Terms, Privacy, Status, License pages
+- Profile password/2FA/sign-in methods route to Clerk's real account-security dialog
+- Settings/Profile actions that have no backend show honest "not available" messaging
+  instead of fake success toasts
 
 ### ❌ Not Built Yet (v2 targets)
 - Real-time view limit enforcement in Worker (currently uncapped)
-- Stripe Usage Records metering (views are not actually reported to Stripe)
-- `api.scrollpop.online` custom domain (API still at `scroll-pop.onrender.com` render subdomain)
-- `cdn.scrollpop.online` / `edge.scrollpop.online` DNS + Cloudflare custom-domain routing —
-  code now references these, but the snippet/config endpoints won't serve until the R2 bucket
-  and Worker custom domains are wired up
-- Clerk Organizations / team UI — personal accounts only for now (no org switcher/create,
-  so the org-based tenant path is dormant)
+- Stripe billing checkout UI (Upgrade/Downgrade button is placeholder — writes localStorage only)
+- Stripe Usage Records metering (views are not reported to Stripe)
+- `api.scrollpop.online` custom domain (API still at `scroll-pop.onrender.com`)
+- Clerk Organizations / team UI — personal accounts only; org-based path dormant
 - `scrollpop.online` marketing site
 - Email notifications (view limit warnings, campaign status changes)
 - Campaign scheduling (start/end dates)
 - Geo targeting (country/region)
 - UTM parameter targeting
 - Webhook / outbound HTTP on conversion events
-- Campaign duplication via UI (backend supports it; no UI button)
+- Campaign duplication via UI (backend supports it; no button)
 - Bulk campaign operations
-- Team invitations via dashboard UI (Clerk invitations exist but no UI wrapper)
+- Team invitations UI (Clerk org invitations exist but no dashboard wrapper)
 - Shopify App Store submission (App Embed Block needed first)
 - Shopify App Embed Block (vs Script Tag)
+- Advanced URL-targeting rule builder + campaign scheduler (removed from wizard as step 3;
+  defaults to all pages / always-on; deferred to post-launch edit screen)
+- Actions step (post-submit redirect, confetti, Mailchimp/Klaviyo, follow-up email) —
+  removed from wizard; snippet always shows success view; revisit when integrations are built
+- API key management (rotate/create API keys — no backend route exists)
+- Analytics reset endpoint (events are immutable append-only)
+- Account-wide data export (GDPR)
+- Account/org deletion backend
 - GoFundMe / Donorbox platform-specific setup guides
 - Admin impersonation for support
-- Data export (GDPR compliance — raw event export for users)
 - Playwright E2E test suite (Vitest unit tests exist)
-- Sentry error tracking wired up (DSN set but SDK not initialised in app code)
-- PostHog analytics wired up (key set but `posthog.init()` not called)
-- Affiliate slot click tracking postback (currently only client-side)
+- Sentry error tracking (DSN set but `Sentry.init()` not called in API or dashboard)
+- PostHog analytics (key set but `posthog.init()` not called)
+- Affiliate slot click tracking postback (client-side only)
 - Conversion event API (external postback from merchant site)
+- Teaser + success step WYSIWYG rendering (snippet uses built-in layout for those two steps)
 
 ---
 
@@ -1279,19 +1309,28 @@ A record of every step taken to go from code to live production. Useful if you e
 4. Updated Render `DASHBOARD_URL` → `https://dashboard.scrollpop.online`
 
 ### Phase 7 — Worker (Cloudflare)
-- Worker project `scrollpop` connected to GitHub
-- Build command corrected to `pnpm --filter worker build` (was wrongly set to dashboard build)
-- Deploy command: `npx wrangler deploy`
-- **Status: connected but not fully deployed** — Worker env vars (KV namespace IDs, R2 bucket) not yet configured
+- Worker project `scrollpop-worker` deployed via GitHub Actions (CI on `Dw-Dwain/Scroll-pop`)
+- Custom domains provisioned automatically: `cdn.scrollpop.online` + `edge.scrollpop.online`
+- `INTERNAL_SECRET` Cloudflare secret set (must equal `INTERNAL_SECRET` on Render API)
+- `API_ORIGIN` set to `https://scroll-pop.onrender.com`
+- **KV namespace** not yet bound — config served uncached from origin (code handles missing KV gracefully)
+
+### Phase 8 — Render Pro Upgrade (May 30, 2026)
+- Upgraded Render service `scroll-pop` from Free → **Pro ($25/mo)**
+- Always-warm: no cold starts, no 10-30s spin-up delay
+- Analytics event forwarding now reliable — previously the Worker's `ctx.waitUntil` forward
+  timed out silently on a cold Render, dropping events before they reached the DB
+- Resolved the edge-config 502 issue that was blocking popup config delivery
+- `INTERNAL_SECRET` auth between Worker and API now works end-to-end (verified 200 on
+  `edge.scrollpop.online/c/<real-key>`)
 
 ### What's Still Pending
-- [ ] Clerk DNS fully verified (all 5 green) — email records may still be propagating
-- [ ] Stripe setup (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price IDs)
-- [ ] GitHub PAT (`workflow` scope) → push `.github/workflows/ci.yml`
-- [ ] Cloudflare R2 bucket setup → update `SNIPPET_CDN_URL`
-- [ ] Cloudflare Worker fully deployed with secrets
-- [ ] Sentry DSN added
-- [ ] PostHog key added
+- [ ] Stripe setup (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price IDs) + billing UI
+- [ ] Cloudflare KV namespace → bind `SCROLLPOP_CONFIG` in `wrangler.toml` for edge caching
+- [ ] Cloudflare R2 bucket → update `SNIPPET_CDN_URL` to serve from R2 instead of Worker bundle
+- [ ] Sentry DSN → call `Sentry.init()` in API + Dashboard
+- [ ] PostHog → call `posthog.init()` in Dashboard
+- [ ] `api.scrollpop.online` custom domain (Cloudflare DNS → Render)
 
 ---
 
