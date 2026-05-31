@@ -316,6 +316,18 @@ async function bootstrap() {
               pageUrl: pageUrl || null,
               referrer: referrer || null,
             });
+
+            // Increment monthly view counter in Redis for edge enforcement.
+            // Only impressions count against the monthly view limit.
+            if (eventType === 'impression' && redis) {
+              const month = new Date().toISOString().slice(0, 7); // e.g. "2026-05"
+              const key = `sp_views:${campaign.tenantId}:${month}`;
+              try {
+                await redis.incr(key);
+                // Keep the key alive through the end of the month + a 7-day buffer.
+                await redis.expire(key, 38 * 24 * 60 * 60); // 38 days
+              } catch { /* non-fatal — enforcement falls back to DB query */ }
+            }
           }
         } catch (err) {
           request.log.error(err, 'Failed to insert analytic event');
