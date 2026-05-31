@@ -203,26 +203,49 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
     else { setSortCol(col); setSortAsc(false); }
   };
 
-  const kpis = [
-    { label: 'Total Impressions', value: overview?.impressions ?? 0,
-      delta: pct(sum(curr30,'impressions'), sum(prev30,'impressions')), mono: true },
-    { label: 'Total Views',       value: overview?.views ?? 0,
-      delta: pct(sum(curr30,'views'), sum(prev30,'views')), mono: true },
-    { label: 'Click-Through Rate',
-      value: overview ? parseFloat(((overview.ctr ?? 0) * 100).toFixed(2)) : 0,
-      delta: pct(currCtr, prevCtr), suffix: '%', mono: true },
-    { label: 'Total Conversions', value: overview?.conversions ?? 0,
-      delta: pct(sum(curr30,'conversions'), sum(prev30,'conversions')), mono: true },
-  ];
+  // Funnel-card data: absolute value + step conversion rate + period delta
+  const impr  = overview?.impressions ?? 0;
+  const views = overview?.views        ?? 0;
+  const clks  = overview?.clicks       ?? 0;
+  const convs = overview?.conversions  ?? 0;
 
-  const totalImpr = overview?.impressions ?? 1;
-  const funnelStages = [
-    { label: 'Impressions', val: overview?.impressions ?? 0 },
-    { label: 'Views',       val: overview?.views ?? 0 },
-    { label: 'Clicks',      val: overview?.clicks ?? 0 },
-    { label: 'Conversions', val: overview?.conversions ?? 0 },
+  const stepPct = (num: number, denom: number) =>
+    denom > 0 ? `${((num / denom) * 100).toFixed(1)}%` : '—';
+
+  const funnelCards = [
+    {
+      label: 'Impressions',
+      value: impr,
+      delta: pct(sum(curr30,'impressions'), sum(prev30,'impressions')),
+      stepLabel: null,
+      stepVal: null,
+      color: 'var(--data-1)',
+    },
+    {
+      label: 'Views',
+      value: views,
+      delta: pct(sum(curr30,'views'), sum(prev30,'views')),
+      stepLabel: 'of impressions',
+      stepVal: stepPct(views, impr),
+      color: 'var(--data-2)',
+    },
+    {
+      label: 'Clicks',
+      value: clks,
+      delta: pct(currCtr, prevCtr),
+      stepLabel: 'of views',
+      stepVal: stepPct(clks, views),
+      color: 'var(--data-3)',
+    },
+    {
+      label: 'Conversions',
+      value: convs,
+      delta: pct(sum(curr30,'conversions'), sum(prev30,'conversions')),
+      stepLabel: 'of clicks',
+      stepVal: stepPct(convs, clks),
+      color: 'var(--data-5)',
+    },
   ];
-  const funnelColors = ['var(--data-1)', 'var(--data-2)', 'var(--data-3)', 'var(--data-5)'];
 
   const SortIcon = ({ col }: { col: SortCol }) => {
     if (sortCol !== col) return <ChevronUp size={10} style={{ opacity: 0.3 }} />;
@@ -268,44 +291,66 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-        {kpis.map((k) => (
-          <div key={k.label} style={{
+      {/* ── Funnel-style KPI row ─────────────────────────────────────────────── */}
+      {/* Each card = one funnel step: absolute count + step conversion + period delta */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0, marginBottom: 24, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+        {funnelCards.map((card, i) => (
+          <div key={card.label} style={{
             background: 'var(--bg-surface)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 8,
-            padding: 20,
+            borderRight: i < 3 ? '1px solid var(--border-subtle)' : 'none',
+            padding: '18px 20px',
+            position: 'relative',
           }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{k.label}</div>
-            {isLoading ? (
-              <div className="skeleton" style={{ height: 32, width: 80 }} />
-            ) : (
+            {/* Arrow connector */}
+            {i < 3 && (
               <div style={{
-                fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 500,
-                color: 'var(--text-primary)', lineHeight: '36px', letterSpacing: '-0.02em',
-              }}>
-                {k.value >= 10000
-                  ? `${(k.value / 1000).toFixed(1)}k`
-                  : k.value.toLocaleString()}{k.suffix ?? ''}
+                position: 'absolute', right: -10, top: '50%', transform: 'translateY(-50%)',
+                width: 18, height: 18, background: 'var(--bg-raised)',
+                border: '1px solid var(--border-subtle)', borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 1, fontSize: 9, color: 'var(--text-muted)',
+              }}>›</div>
+            )}
+
+            {/* Step label */}
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.02em', textTransform: 'uppercase', fontWeight: 600 }}>
+              {card.label}
+            </div>
+
+            {/* Absolute number */}
+            {isLoading ? (
+              <div className="skeleton" style={{ height: 32, width: 80, marginBottom: 10 }} />
+            ) : (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 500, color: 'var(--text-primary)', lineHeight: '36px', letterSpacing: '-0.02em', marginBottom: 8 }}>
+                {card.value >= 10000 ? `${(card.value / 1000).toFixed(1)}k` : card.value.toLocaleString()}
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-              <TrendingUp size={11} style={{ color: 'var(--status-success)' }} />
-              <span style={{ fontSize: 11, color: 'var(--status-success)' }}>{k.delta}</span>
+
+            {/* Bottom row: step conversion % + period delta */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              {card.stepVal ? (
+                <span style={{ fontSize: 12, fontWeight: 600, color: card.color, fontFamily: 'var(--font-mono)' }}>
+                  {card.stepVal} <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)' }}>{card.stepLabel}</span>
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Entry</span>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <TrendingUp size={10} style={{ color: card.delta.startsWith('+') ? 'var(--status-success)' : card.delta === '—' ? 'var(--text-muted)' : 'var(--status-error)' }} />
+                <span style={{ fontSize: 11, color: card.delta.startsWith('+') ? 'var(--status-success)' : card.delta === '—' ? 'var(--text-muted)' : 'var(--status-error)' }}>
+                  {card.delta}
+                </span>
+              </div>
             </div>
+
+            {/* Thin colour bar at bottom */}
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: card.color, opacity: 0.6 }} />
           </div>
         ))}
       </div>
 
-      {/* Trend chart + Funnel — 2-col */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, marginBottom: 24 }}>
-      <div style={{
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 8,
-        padding: 20,
-      }}>
+      {/* Trend chart — full width now funnel is merged above */}
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20, marginBottom: 24 }}>
         <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
           Trend Analysis
           <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
@@ -314,43 +359,6 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         </h3>
         <TrendChart daily={curr30} />
       </div>
-
-      {/* Conversion funnel */}
-      <div style={{
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 8,
-        padding: 20,
-      }}>
-        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
-          Conversion Funnel
-        </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${funnelStages.length}, 1fr)`, gap: 12 }}>
-          {funnelStages.map((stage, i) => {
-            const pct = totalImpr > 0 ? ((stage.val / totalImpr) * 100).toFixed(1) : '0.0';
-            const barW = totalImpr > 0 ? (stage.val / totalImpr) * 100 : 0;
-            return (
-              <div key={stage.label}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{stage.label}</div>
-                <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 500,
-                  color: 'var(--text-primary)', marginBottom: 6,
-                }}>
-                  {stage.val >= 10000
-                    ? `${(stage.val / 1000).toFixed(1)}k`
-                    : stage.val.toLocaleString()}
-                </div>
-                <div style={{ height: 4, background: 'var(--bg-raised)', borderRadius: 2, marginBottom: 4 }}>
-                  <div style={{ height: '100%', width: `${barW}%`, background: funnelColors[i], borderRadius: 2, transition: 'width 600ms' }} />
-                </div>
-                <div style={{ fontSize: 11, color: funnelColors[i] }}>{pct}%</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      </div>{/* end 2-col grid */}
 
       {/* Campaign breakdown table */}
       <div style={{
