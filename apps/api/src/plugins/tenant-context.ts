@@ -64,7 +64,7 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     if (PUBLIC_ROUTES.some((r) => request.url.startsWith(r))) return;
     // Check for Internal Secret bypass (for Desktop Admin app)
     const authHeader = request.headers.authorization;
-    const internalSecret = process.env['INTERNAL_SECRET'] || 'change_me_in_production_32_chars_min';
+    const internalSecret = process.env['INTERNAL_SECRET'];
     if (authHeader && authHeader === `Bearer ${internalSecret}`) {
       const tenantOverride = request.headers['x-tenant-override'] as string | undefined;
       if (tenantOverride && tenantOverride.length === 36) {

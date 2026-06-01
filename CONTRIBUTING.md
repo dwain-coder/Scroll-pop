@@ -242,10 +242,7 @@ A cron job / migration to auto-create future partitions is on the v2 roadmap.
 | **Typecheck** | TypeScript errors across all packages |
 | **Unit Tests** | Vitest unit test failures |
 | **No history.* / popstate** | Banned browser navigation APIs in snippet (CLAUDE.md rule #1) |
-
-> The **Snippet Size Check (≤ 10 KB gzipped)** runs in CI but is not a required
-> merge gate due to a character-encoding issue with the `≤` symbol in GitHub's
-> branch protection matcher. It still blocks Worker deploys if it fails.
+| **Snippet Size Check** | Hard CI gate ensuring snippet stays ≤ 10 KB gzipped |
 
 ---
 

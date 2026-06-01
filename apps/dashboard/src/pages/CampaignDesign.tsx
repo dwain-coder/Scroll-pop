@@ -17,9 +17,57 @@ interface CampaignDesignProps {
 }
 
 // Helper to bootstrap Campaign object from legacy flat fields or new steps config
-function bootstrapCampaign(campaignId: string, campaignName: string, designData: any): Campaign {
+function bootstrapCampaign(
+  campaignId: string,
+  campaignName: string,
+  designData: any,
+  triggersData: any[] = [],
+  targetingData: any[] = [],
+  frequencyData: any = {}
+): Campaign {
   const config = designData?.config || {};
   
+  let exitIntent = true;
+  let scrollPercent = 30;
+  let inactivitySeconds = 20;
+  let timeDelaySeconds = 5;
+
+  if (triggersData.length > 0) {
+    exitIntent = false;
+    scrollPercent = 0;
+    inactivitySeconds = 0;
+    timeDelaySeconds = 0;
+    triggersData.forEach((t) => {
+      if (t.type === 'exit_intent_mouse') exitIntent = true;
+      if (t.type === 'scroll_pct') scrollPercent = t.params?.pct || 30;
+      if (t.type === 'inactivity') inactivitySeconds = t.params?.seconds || 20;
+      if (t.type === 'dwell_time') timeDelaySeconds = t.params?.seconds || 5;
+    });
+  } else {
+    exitIntent = config.steps?.main?.triggers?.exitIntent ?? true;
+    scrollPercent = config.steps?.main?.triggers?.scrollPercent ?? 30;
+    inactivitySeconds = config.steps?.main?.triggers?.inactivitySeconds ?? 20;
+    timeDelaySeconds = config.steps?.main?.triggers?.timeDelaySeconds ?? 5;
+  }
+
+  let deviceTargeting = 'all';
+  let newVisitorOnly = false;
+  let pageTargeting = '*';
+
+  if (targetingData.length > 0) {
+    targetingData.forEach((t) => {
+      if (t.kind === 'device') deviceTargeting = t.value?.device || 'all';
+      if (t.kind === 'returning_visitor') newVisitorOnly = t.value?.returning === false;
+      if (t.kind === 'url_contains') pageTargeting = t.value?.pattern || '*';
+    });
+  } else {
+    deviceTargeting = config.steps?.main?.triggers?.deviceTargeting ?? 'all';
+    newVisitorOnly = config.steps?.main?.triggers?.newVisitorOnly ?? false;
+    pageTargeting = config.steps?.main?.triggers?.pageTargeting ?? '*';
+  }
+
+  const frequencyCapDays = frequencyData?.frequency ? (frequencyData.frequency === 'always' ? 0 : 7) : (config.steps?.main?.triggers?.frequencyCapDays ?? 7);
+
   if (config.steps) {
     return {
       id: campaignId,
@@ -28,15 +76,15 @@ function bootstrapCampaign(campaignId: string, campaignName: string, designData:
       isActive: true,
       steps: config.steps,
       triggers: {
-        exitIntent: config.steps.main?.triggers?.exitIntent ?? true,
-        scrollPercent: config.steps.main?.triggers?.scrollPercent ?? 30,
-        inactivitySeconds: config.steps.main?.triggers?.inactivitySeconds ?? 20,
-        timeDelaySeconds: config.steps.main?.triggers?.timeDelaySeconds ?? 5,
-        pageTargeting: config.steps.main?.triggers?.pageTargeting ?? '*',
-        deviceTargeting: config.steps.main?.triggers?.deviceTargeting ?? 'all',
+        exitIntent,
+        scrollPercent,
+        inactivitySeconds,
+        timeDelaySeconds,
+        pageTargeting,
+        deviceTargeting: deviceTargeting as 'all' | 'desktop' | 'mobile' | 'tablet',
         geoTargeting: config.steps.main?.triggers?.geoTargeting ?? 'All Countries',
-        frequencyCapDays: config.steps.main?.triggers?.frequencyCapDays ?? 7,
-        newVisitorOnly: config.steps.main?.triggers?.newVisitorOnly ?? false,
+        frequencyCapDays,
+        newVisitorOnly,
         sessionPageCount: config.steps.main?.triggers?.sessionPageCount ?? 0,
         utmSource: config.steps.main?.triggers?.utmSource ?? '',
         abTestPercent: config.steps.main?.triggers?.abTestPercent ?? 100,
@@ -318,6 +366,18 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     url: `${apiUrl}/campaigns/${campaignId}/design`,
     method: 'get',
   });
+  const { data: triggersData, isLoading: isTriggersLoading } = useCustom({
+    url: `${apiUrl}/campaigns/${campaignId}/triggers`,
+    method: 'get',
+  });
+  const { data: targetingData, isLoading: isTargetingLoading } = useCustom({
+    url: `${apiUrl}/campaigns/${campaignId}/targeting`,
+    method: 'get',
+  });
+  const { data: frequencyData, isLoading: isFrequencyLoading } = useCustom({
+    url: `${apiUrl}/campaigns/${campaignId}/frequency`,
+    method: 'get',
+  });
   const { mutate, mutateAsync } = useCustomMutation();
 
   const [campaign, setCampaign] = React.useState<Campaign | null>(null);
@@ -343,20 +403,23 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
   // The apiLoadedRef ensures we only load once (so in-progress user edits are never reset).
   React.useEffect(() => {
     if (apiLoadedRef.current) return;
-    const bothSettled = !isCampaignLoading && !isDesignLoading;
+    const bothSettled = !isCampaignLoading && !isDesignLoading && !isTriggersLoading && !isTargetingLoading && !isFrequencyLoading;
     if (!bothSettled) return;
 
     apiLoadedRef.current = true;
     const camp = bootstrapCampaign(
       campaignId,
       campaignData?.data?.name || 'New Campaign',
-      designData?.data || {}
+      designData?.data || {},
+      (triggersData?.data as any[]) || [],
+      (targetingData?.data as any[]) || [],
+      (frequencyData?.data as any) || {}
     );
     setCampaign(camp);
     setHistory([JSON.parse(JSON.stringify(camp.steps.main.elements))]);
     setHistoryIndex(0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignData, designData, isCampaignLoading, isDesignLoading, campaignId]);
+  }, [campaignData, designData, triggersData, targetingData, frequencyData, isCampaignLoading, isDesignLoading, isTriggersLoading, isTargetingLoading, isFrequencyLoading, campaignId]);
 
   // Fallback: if API hasn't responded within 8s, load from sessionStorage cache so the
   // canvas isn't stuck on a blank spinner. The primary effect above will override this

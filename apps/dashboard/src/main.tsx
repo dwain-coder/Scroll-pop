@@ -54,13 +54,13 @@ import { isFeatureEnabled } from './lib/flags';
 import './index.css';
 
 // Clerk Publishable Key mapping
-const CLERK_PUBLISHABLE_KEY = ((import.meta as any).env.VITE_CLERK_PUBLISHABLE_KEY as string)
-  || 'pk_test_c2F2ZWQtbWFzdG9kb24tMjcuY2xlcmsuYWNjb3VudHMuZGV2JA';
+const PUBLISHABLE_KEY =
+  (import.meta as any).env.VITE_CLERK_PUBLISHABLE_KEY ||
+  (window as any).__ENV__?.VITE_CLERK_PUBLISHABLE_KEY;
 
-const IS_DEMO_MODE =
-  CLERK_PUBLISHABLE_KEY === 'pk_test_c2F2ZWQtbWFzdG9kb24tMjcuY2xlcmsuYWNjb3VudHMuZGV2JA' ||
-  !CLERK_PUBLISHABLE_KEY ||
-  ((import.meta as any).env.VITE_DEMO_MODE === 'true');
+const isDevKey = PUBLISHABLE_KEY?.startsWith('pk_test_');
+
+const IS_DEMO_MODE = isDevKey || !PUBLISHABLE_KEY || ((import.meta as any).env.VITE_DEMO_MODE === 'true');
 const OPS_CENTER_ENABLED = isFeatureEnabled('ff_realtime_ops_dashboard');
 const JOURNEYS_ENABLED = isFeatureEnabled('ff_journeys_ui');
 const EXPERIMENTS_ENABLED = isFeatureEnabled('ff_experiments_v1');
@@ -347,7 +347,7 @@ const DesktopAppContent: React.FC = () => {
   
   const handleLogin = () => {
     // Save the internal secret to auth bypass the cloud
-    const secret = (import.meta as any).env.VITE_INTERNAL_SECRET || 'change_me_in_production_32_chars_min';
+    const secret = (import.meta as any).env.VITE_INTERNAL_SECRET;
     localStorage.setItem('desktop_token', secret);
     setIsAuthenticated(true);
     try {
@@ -411,7 +411,7 @@ const Root: React.FC = () => {
   }
   return (
     <ClerkProvider
-      publishableKey={CLERK_PUBLISHABLE_KEY}
+      publishableKey={PUBLISHABLE_KEY || ''}
       signInFallbackRedirectUrl="/dashboard"
       signUpFallbackRedirectUrl="/dashboard"
       allowedRedirectOrigins={[

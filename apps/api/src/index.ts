@@ -102,7 +102,7 @@ async function bootstrap() {
   // Dev-only auth login bypass (local/desktop client convenience — never runs in production)
   if (isDev) {
     app.post('/api/v1/auth/login', async (_request, reply) => {
-      const internalSecret = process.env['INTERNAL_SECRET'] || 'change_me_in_production_32_chars_min';
+      const internalSecret = process.env['INTERNAL_SECRET'];
       return reply.send({
         token: internalSecret,
         user: {
