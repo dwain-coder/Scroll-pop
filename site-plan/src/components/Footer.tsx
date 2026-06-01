@@ -32,7 +32,7 @@ export default function Footer({ onPageChange, onTriggerDemoPopup }: FooterProps
           </p>
           <a
             href={`${DASHBOARD_URL}/sign-up`}
-            className="w-fit h-10 px-6 rounded-full bg-white text-black text-xs font-bold uppercase tracking-widest hover:bg-white/90 transition-all shadow-xl"
+            className="w-fit h-10 px-6 rounded-full bg-white text-black text-xs font-bold uppercase tracking-widest hover:bg-white/90 transition-all shadow-xl flex items-center justify-center"
           >
             Start Free →
           </a>

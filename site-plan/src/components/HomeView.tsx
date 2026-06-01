@@ -131,7 +131,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
           </div>
 
           <div className="mt-20">
-            <ScrollPopDemo customSetup={selectedTemplateSettings} />
+            <ScrollPopDemo />
           </div>
         </div>
       </section>
