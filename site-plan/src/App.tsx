@@ -7,6 +7,7 @@ import TemplatesView from './components/TemplatesView';
 import PricingView from './components/PricingView';
 import WordPressShopifyGuide from './components/WordPressShopifyGuide';
 import ContactView from './components/ContactView';
+import LegalView from './components/LegalView';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, X, Check, Mail, ShoppingBag } from 'lucide-react';
 
@@ -101,7 +102,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F5] text-[#111111] selection:bg-black selection:text-white flex flex-col justify-between overflow-x-hidden antialiased relative">
+    <div className="min-h-screen bg-[#FAF9F5] text-[#111111] selection:bg-black selection:text-white flex flex-col overflow-x-hidden antialiased relative">
       
       {/* Editorial Sophisticated Light ambient background glows */}
       <div className="hero-glow z-0" />
@@ -142,6 +143,15 @@ export default function App() {
             )}
             {activePage === 'contact' && (
               <ContactView />
+            )}
+            {activePage === 'privacy-policy' && (
+              <LegalView page="privacy-policy" onPageChange={setActivePage} />
+            )}
+            {activePage === 'terms' && (
+              <LegalView page="terms" onPageChange={setActivePage} />
+            )}
+            {activePage === 'security' && (
+              <LegalView page="security" onPageChange={setActivePage} />
             )}
           </motion.div>
         </AnimatePresence>

@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { ArrowRight, Search, ExternalLink } from 'lucide-react';
+import { ArrowRight, ExternalLink } from 'lucide-react';
 
 const DASHBOARD_URL = 'https://dashboard.scrollpop.online';
+
+type Position = 'center' | 'bottom-right' | 'top-bar';
 
 interface Template {
   id: string;
@@ -9,90 +10,225 @@ interface Template {
   category: string;
   description: string;
   trigger: string;
+  position: Position;
   colors: { bg: string; accent: string; text: string };
-  imageUrl?: string;
+  bgImage: string;
+  preview: { badge: string; title: string; body: string; cta: string };
 }
 
-// Real templates matching the actual ScrollPop app library
 const TEMPLATES: Template[] = [
-  // Welcome
-  { id: 'welcome-clean', name: 'Round Welcome — Clean', category: 'Welcome', description: 'Simple welcome popup with first-order discount and email capture.', trigger: 'Scroll 30%', colors: { bg: '#ffffff', accent: '#6366f1', text: '#111827' } },
-  { id: 'welcome-contrast', name: 'High Contrast Welcome', category: 'Welcome', description: 'Dark navy/amber two-column layout with bold first-order offer.', trigger: 'Scroll 30%', colors: { bg: '#0f172a', accent: '#f59e0b', text: '#ffffff' } },
-  { id: 'welcome-gift', name: 'First Order Offer', category: 'Welcome', description: 'Gift-focused warm orange popup — unlock 20% off first order.', trigger: 'Dwell 5s', colors: { bg: '#fff7ed', accent: '#ea580c', text: '#7c2d12' } },
-  { id: 'welcome-shipping', name: 'Welcome + Free Shipping', category: 'Welcome', description: 'Green split layout — no minimum spend free shipping offer.', trigger: 'Scroll 20%', colors: { bg: '#f0fdf4', accent: '#16a34a', text: '#14532d' } },
-  { id: 'welcome-slide', name: 'Minimal Welcome Slide-in', category: 'Welcome', description: 'Non-intrusive slide-in for first-time visitors. Low friction.', trigger: 'Dwell 3s', colors: { bg: '#ffffff', accent: '#8b5cf6', text: '#111827' } },
-  // Exit Intent
-  { id: 'exit-coupon', name: 'Exit — Last Chance Coupon', category: 'Exit Intent', description: 'Final offer before visitor leaves — 20% off coupon with countdown.', trigger: 'Exit intent', colors: { bg: '#ffffff', accent: '#dc2626', text: '#111827' } },
-  { id: 'exit-cart', name: 'Exit — Cart Recovery', category: 'Exit Intent', description: 'Dark/amber popup for visitors leaving the cart page.', trigger: 'Exit intent', colors: { bg: '#0f172a', accent: '#f59e0b', text: '#ffffff' } },
-  { id: 'exit-browse', name: 'Exit — Browse Recovery', category: 'Exit Intent', description: 'Re-engage visitors who browsed but never added to cart.', trigger: 'Exit intent', colors: { bg: '#ffffff', accent: '#0ea5e9', text: '#111827' } },
-  { id: 'exit-demo', name: 'Exit — Book a Demo', category: 'Exit Intent', description: 'B2B exit popup offering a free 15-minute personalised demo.', trigger: 'Exit intent', colors: { bg: '#ffffff', accent: '#4f46e5', text: '#111827' } },
-  // Email Capture
-  { id: 'email-lightbox', name: 'Lightbox Email Offer', category: 'Email Capture', description: 'Classic lightbox — 15% off instant coupon for email signup.', trigger: 'Scroll 40%', colors: { bg: '#ffffff', accent: '#059669', text: '#111827' } },
-  { id: 'email-course', name: 'Free Course Lead Capture', category: 'Email Capture', description: 'Offer a free course or guide in exchange for email signup.', trigger: 'Dwell 10s', colors: { bg: '#eff6ff', accent: '#2563eb', text: '#1e3a5f' } },
-  { id: 'email-bar', name: 'Email Nanobar', category: 'Email Capture', description: 'Persistent bottom bar — least intrusive, always visible.', trigger: 'Scroll 10%', colors: { bg: '#111827', accent: '#6366f1', text: '#e5e7eb' } },
-  { id: 'email-referral', name: 'Refer a Friend', category: 'Email Capture', description: 'Give $10 · Get $10 — referral popup for loyalty building.', trigger: 'Scroll 50%', colors: { bg: '#f5f3ff', accent: '#7c3aed', text: '#4c1d95' } },
-  // Upsell
-  { id: 'upsell-qty', name: 'Buy More, Save More', category: 'Upsell', description: 'Triggered after add-to-cart — buy 2 and save 20%.', trigger: 'After add-to-cart', colors: { bg: '#eff6ff', accent: '#2563eb', text: '#1e3a5f' } },
-  { id: 'upsell-upgrade', name: 'Upgrade Upsell', category: 'Upsell', description: 'Suggest premium version in a slide-in — "Switch for $10 more".', trigger: 'After add-to-cart', colors: { bg: '#1e1b4b', accent: '#a855f7', text: '#ffffff' } },
-  // Cross-Sell
-  { id: 'cross-bundle', name: 'Bundle & Complete the Look', category: 'Cross-Sell', description: 'Product recommendation popup triggered after add-to-cart.', trigger: 'After add-to-cart', colors: { bg: '#ffffff', accent: '#111827', text: '#111827' } },
-  { id: 'cross-gift', name: 'Free Gift With Purchase', category: 'Cross-Sell', description: 'Show a free gift threshold — spend $75+ to qualify.', trigger: 'Scroll 40%', colors: { bg: '#fdf4ff', accent: '#9333ea', text: '#581c87' } },
-  // Sale & Promotions
-  { id: 'promo-flash', name: 'Flash Sale — Countdown', category: 'Sale & Promotions', description: 'Crimson urgency popup with countdown timer — 40% off everything.', trigger: 'Scroll 20%', colors: { bg: '#7f1d1d', accent: '#fbbf24', text: '#ffffff' } },
-  { id: 'promo-bar', name: 'Promo Announcement Bar', category: 'Sale & Promotions', description: 'Sticky top bar announcing current sales without blocking content.', trigger: 'Page load', colors: { bg: '#6366f1', accent: '#ffffff', text: '#ffffff' } },
-  { id: 'promo-bfriday', name: 'Black Friday Blowout', category: 'Sale & Promotions', description: 'Maximum contrast Black Friday popup — 50% off sitewide.', trigger: 'Scroll 20%', colors: { bg: '#000000', accent: '#eab308', text: '#ffffff' } },
-  { id: 'promo-xmas', name: 'Christmas Sale', category: 'Sale & Promotions', description: 'Festive Christmas popup with coupon reveal — 25% off.', trigger: 'Scroll 20%', colors: { bg: '#14532d', accent: '#fbbf24', text: '#ffffff' } },
-  { id: 'promo-valentine', name: "Valentine's Day Sale", category: 'Sale & Promotions', description: 'Romantic rose pink popup for gift campaigns.', trigger: 'Scroll 20%', colors: { bg: '#fff1f2', accent: '#e11d48', text: '#881337' } },
-  // Gamified
-  { id: 'spin-wheel', name: 'Spin-to-Win Wheel', category: 'Gamified', description: 'Interactive spin wheel — win up to 50% off. High engagement.', trigger: 'Dwell 5s', colors: { bg: '#0f172a', accent: '#fbbf24', text: '#ffffff' } },
-  { id: 'scratch-card', name: 'Scratch & Reveal', category: 'Gamified', description: 'Scratch-card mystery discount — builds curiosity before reveal.', trigger: 'Dwell 5s', colors: { bg: '#1e1b4b', accent: '#fbbf24', text: '#ffffff' } },
+  {
+    id: 'welcome',
+    name: 'Welcome Offer',
+    category: 'Welcome',
+    description: 'First-order discount for new visitors. Scroll-triggered center modal with email capture.',
+    trigger: 'Scroll 30%',
+    position: 'center',
+    colors: { bg: '#ffffff', accent: '#6366f1', text: '#111827' },
+    bgImage: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=600&q=60',
+    preview: { badge: '🎁 FIRST ORDER', title: 'Welcome! Get 10% Off', body: 'Sign up and your coupon lands instantly.', cta: 'Claim My 10% Off' },
+  },
+  {
+    id: 'exit',
+    name: 'Exit Intent',
+    category: 'Exit Intent',
+    description: 'Last-chance offer fires when the cursor leaves the viewport. High-urgency dark design.',
+    trigger: 'Exit intent',
+    position: 'center',
+    colors: { bg: '#0f172a', accent: '#f59e0b', text: '#ffffff' },
+    bgImage: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=600&q=60',
+    preview: { badge: '⏳ LAST CHANCE', title: 'Wait — 20% Off Just For You', body: 'This offer expires when you leave.', cta: 'Claim 20% Off Now' },
+  },
+  {
+    id: 'email-capture',
+    name: 'Email Lead Capture',
+    category: 'Email Capture',
+    description: 'Classic lightbox for newsletter or course sign-up. Clean, minimal, high-converting.',
+    trigger: 'Dwell 10s',
+    position: 'center',
+    colors: { bg: '#eff6ff', accent: '#2563eb', text: '#1e3a5f' },
+    bgImage: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=600&q=60',
+    preview: { badge: '📧 FREE COURSE', title: 'Double Your Conversion Rate', body: 'Join 12,000+ marketers — free 5-day course.', cta: 'Send Me The Course' },
+  },
+  {
+    id: 'flash-sale',
+    name: 'Flash Sale Countdown',
+    category: 'Sale & Promotions',
+    description: 'High-urgency sale popup with countdown timer. Crimson and gold — impossible to miss.',
+    trigger: 'Scroll 20%',
+    position: 'center',
+    colors: { bg: '#7f1d1d', accent: '#fbbf24', text: '#ffffff' },
+    bgImage: 'https://images.unsplash.com/photo-1607082349566-187342175e2f?auto=format&fit=crop&w=600&q=60',
+    preview: { badge: '⚡ FLASH SALE', title: '40% Off Everything', body: 'Ends tonight. Code FLASH40 at checkout.', cta: 'Shop the Flash Sale' },
+  },
+  {
+    id: 'slide-in',
+    name: 'Side Slide-in',
+    category: 'Email Capture',
+    description: 'Non-intrusive slide-in card at bottom-right. Soft prompt — low friction, high retention.',
+    trigger: 'Dwell 8s',
+    position: 'bottom-right',
+    colors: { bg: '#ffffff', accent: '#7c3aed', text: '#111827' },
+    bgImage: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&w=600&q=60',
+    preview: { badge: '💬 SOFT PROMPT', title: 'Before You Go…', body: 'Join 5,000+ subscribers for weekly deals.', cta: "Yes, I'm In" },
+  },
+  {
+    id: 'affiliate',
+    name: 'Affiliate Product Deal',
+    category: 'Affiliate',
+    description: 'Affiliate-monetised popup with product image and CTA. Triggered deep in the scroll journey.',
+    trigger: 'Scroll 60%',
+    position: 'center',
+    colors: { bg: '#fffbf0', accent: '#d97706', text: '#1c1917' },
+    bgImage: 'https://images.unsplash.com/photo-1556228578-0d85b1a4a503?auto=format&fit=crop&w=600&q=60',
+    preview: { badge: '🛍️ PARTNER DEAL', title: 'Trending: Premium Skincare Kit', body: "Editor's pick. Free shipping today only.", cta: 'See This Deal →' },
+  },
+  {
+    id: 'announcement-bar',
+    name: 'Announcement Bar',
+    category: 'Sale & Promotions',
+    description: 'Sticky top bar that appears on page load. Least intrusive format — no content blocked.',
+    trigger: 'Page load',
+    position: 'top-bar',
+    colors: { bg: '#1e1b4b', accent: '#a5b4fc', text: '#ffffff' },
+    bgImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=60',
+    preview: { badge: '🔔', title: '🚚 Free shipping on orders over $50 — ends tonight!', body: '', cta: 'Shop Now' },
+  },
+  {
+    id: 'spin-wheel',
+    name: 'Spin-to-Win Wheel',
+    category: 'Gamified',
+    description: 'Interactive spin wheel with prize segments. Drives 3× more engagement than static popups.',
+    trigger: 'Dwell 5s',
+    position: 'center',
+    colors: { bg: '#0f172a', accent: '#fbbf24', text: '#ffffff' },
+    bgImage: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=600&q=60',
+    preview: { badge: '🎡 SPIN & WIN', title: 'Try Your Luck!', body: 'Spin for up to 50% off. One spin per visit.', cta: 'Spin the Wheel' },
+  },
 ];
 
-const CATEGORIES = ['All', 'Welcome', 'Exit Intent', 'Email Capture', 'Upsell', 'Cross-Sell', 'Sale & Promotions', 'Gamified'];
+function PopupMockup({ t }: { t: Template }) {
+  if (t.position === 'top-bar') {
+    return (
+      <div
+        className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 py-2.5 z-10"
+        style={{ backgroundColor: t.colors.bg }}
+      >
+        <p className="text-[9px] font-semibold truncate flex-1 pr-2" style={{ color: t.colors.text }}>
+          {t.preview.title}
+        </p>
+        <button
+          className="text-[8px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap text-white"
+          style={{ backgroundColor: t.colors.accent }}
+        >
+          {t.preview.cta}
+        </button>
+      </div>
+    );
+  }
+
+  if (t.position === 'bottom-right') {
+    return (
+      <div
+        className="absolute bottom-3 right-3 w-44 rounded-xl shadow-2xl p-3.5 z-10 border"
+        style={{
+          backgroundColor: t.colors.bg,
+          borderColor: `${t.colors.text}10`,
+        }}
+      >
+        <span
+          className="text-[8px] font-bold px-1.5 py-0.5 rounded-full inline-block mb-1.5"
+          style={{ backgroundColor: `${t.colors.accent}20`, color: t.colors.accent }}
+        >
+          {t.preview.badge}
+        </span>
+        <p className="text-[9px] font-bold leading-tight mb-1" style={{ color: t.colors.text }}>
+          {t.preview.title}
+        </p>
+        <p className="text-[8px] opacity-60 leading-tight mb-2" style={{ color: t.colors.text }}>
+          {t.preview.body}
+        </p>
+        <div className="h-3.5 w-full rounded mb-1" style={{ backgroundColor: `${t.colors.accent}20`, border: `1px solid ${t.colors.accent}30` }} />
+        <div className="h-4 w-full rounded flex items-center justify-center" style={{ backgroundColor: t.colors.accent }}>
+          <span className="text-white text-[7px] font-bold">{t.preview.cta}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Center modal
+  return (
+    <div
+      className="w-52 rounded-2xl shadow-2xl overflow-hidden z-10 relative"
+      style={{ backgroundColor: t.colors.bg, border: `1px solid ${t.colors.text}10` }}
+    >
+      <div className="p-4">
+        <span
+          className="text-[8px] font-bold px-2 py-0.5 rounded-full inline-block mb-2"
+          style={{ backgroundColor: `${t.colors.accent}22`, color: t.colors.accent }}
+        >
+          {t.preview.badge}
+        </span>
+        <h3
+          className="text-[11px] font-bold leading-tight mb-1"
+          style={{ color: t.colors.text, fontFamily: 'serif' }}
+        >
+          {t.preview.title}
+        </h3>
+        <p className="text-[8px] leading-relaxed mb-3 opacity-65" style={{ color: t.colors.text }}>
+          {t.preview.body}
+        </p>
+        <div
+          className="h-5 w-full rounded-md mb-1.5"
+          style={{ backgroundColor: `${t.colors.accent}12`, border: `1px solid ${t.colors.accent}30` }}
+        />
+        <div
+          className="h-6 w-full rounded-md flex items-center justify-center"
+          style={{ backgroundColor: t.colors.accent }}
+        >
+          <span className="text-white text-[8px] font-bold">{t.preview.cta}</span>
+        </div>
+        <p className="text-center text-[7px] mt-2 opacity-40" style={{ color: t.colors.text }}>
+          No thanks
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function TemplateCard({ t }: { t: Template }) {
   return (
-    <div className="glass rounded-2xl overflow-hidden hover:border-neutral-300 hover:-translate-y-1 transition-all duration-300 flex flex-col">
-      {/* Colour preview strip */}
-      <div
-        className="relative h-36 flex items-center justify-center overflow-hidden"
-        style={{ backgroundColor: t.colors.bg }}
-      >
-        {/* Fake popup preview */}
-        <div
-          className="w-44 shadow-lg rounded-lg p-4 border"
-          style={{
-            backgroundColor: t.colors.bg,
-            borderColor: `${t.colors.accent}30`,
-          }}
-        >
-          <div
-            className="h-1.5 w-8 rounded-full mb-2"
-            style={{ backgroundColor: t.colors.accent }}
-          />
-          <div
-            className="h-2 w-full rounded mb-1 opacity-30"
-            style={{ backgroundColor: t.colors.text }}
-          />
-          <div
-            className="h-2 w-3/4 rounded mb-3 opacity-20"
-            style={{ backgroundColor: t.colors.text }}
-          />
-          <div
-            className="h-5 w-full rounded text-center"
-            style={{ backgroundColor: t.colors.accent }}
-          />
+    <div className="glass rounded-2xl overflow-hidden hover:border-neutral-300 hover:-translate-y-1 transition-all duration-300 flex flex-col group">
+      {/* Preview */}
+      <div className="relative h-52 overflow-hidden bg-neutral-900">
+        {/* Background photo */}
+        <img
+          src={t.bgImage}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover opacity-35 group-hover:opacity-45 transition-opacity duration-500 group-hover:scale-105 transition-transform"
+          referrerPolicy="no-referrer"
+        />
+        {/* Dark overlay for center modals */}
+        {t.position === 'center' && (
+          <div className="absolute inset-0 bg-black/40" />
+        )}
+
+        {/* Popup mockup */}
+        <div className={`absolute inset-0 flex ${
+          t.position === 'center' ? 'items-center justify-center' :
+          t.position === 'bottom-right' ? 'items-end justify-end' :
+          'items-start'
+        }`}>
+          <PopupMockup t={t} />
         </div>
 
-        {/* Category badge */}
-        <span className="absolute top-3 left-3 py-0.5 px-2.5 bg-neutral-900/80 backdrop-blur-sm rounded-full text-[9px] font-mono font-bold tracking-widest uppercase text-white">
+        {/* Category + trigger badges */}
+        <span className="absolute bottom-3 left-3 py-0.5 px-2.5 bg-neutral-900/80 backdrop-blur-sm rounded-full text-[9px] font-mono font-bold tracking-widest uppercase text-white z-20">
           {t.category}
         </span>
-
-        {/* Trigger badge */}
         <span
-          className="absolute top-3 right-3 py-0.5 px-2.5 rounded-full text-[9px] font-mono font-bold"
-          style={{ backgroundColor: `${t.colors.accent}25`, color: t.colors.accent }}
+          className="absolute bottom-3 right-3 py-0.5 px-2.5 rounded-full text-[9px] font-mono font-bold z-20"
+          style={{ backgroundColor: `${t.colors.accent}30`, color: t.colors.accent === '#ffffff' ? '#a5b4fc' : t.colors.accent }}
         >
           {t.trigger}
         </span>
@@ -104,10 +240,8 @@ function TemplateCard({ t }: { t: Template }) {
           <h3 className="font-serif text-base font-normal text-neutral-900">{t.name}</h3>
           <p className="text-xs text-neutral-600 font-light mt-1 leading-relaxed">{t.description}</p>
         </div>
-
-        {/* Single CTA */}
         <a
-          href={`${DASHBOARD_URL}/sign-up`}
+          href={DASHBOARD_URL}
           className="w-full h-9 font-mono text-[11px] font-bold uppercase tracking-wider rounded border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
         >
           Use This Template <ExternalLink className="h-3 w-3" />
@@ -118,73 +252,29 @@ function TemplateCard({ t }: { t: Template }) {
 }
 
 export default function TemplatesView() {
-  const [filter, setFilter] = useState('All');
-  const [search, setSearch] = useState('');
-
-  const filtered = TEMPLATES.filter(t => {
-    const matchCat = filter === 'All' || t.category === filter;
-    const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) ||
-      t.description.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
-  });
-
   return (
     <div className="max-w-7xl mx-auto px-6 py-16 font-sans text-neutral-800">
 
       {/* Header */}
       <div className="text-center max-w-3xl mx-auto mb-16">
-        <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block mb-3">38+ TEMPLATES</span>
+        <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block mb-3">POPUP TEMPLATES</span>
         <h1 className="font-serif text-4xl md:text-6xl font-normal tracking-tight leading-none text-gradient">
           Template library
         </h1>
         <p className="text-neutral-600 font-light text-base md:text-lg mt-4 leading-relaxed">
-          Every template is fully editable in the ScrollPop visual builder. Pick one, customise it to match your brand, and launch in minutes.
+          Eight ready-to-launch popup types — every one fully editable in the visual builder. Pick one, match your brand, go live in minutes.
         </p>
         <a
-          href={`${DASHBOARD_URL}/sign-up`}
+          href={DASHBOARD_URL}
           className="inline-flex items-center gap-2 mt-8 h-12 px-8 bg-neutral-950 text-white rounded-full text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-xl"
         >
           Browse All Templates in the Dashboard →
         </a>
       </div>
 
-      {/* Filters + Search */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-8 border-b border-neutral-200 mb-12">
-        <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={`py-1.5 px-4 text-xs font-mono rounded-full border tracking-wide transition-all cursor-pointer ${
-                filter === cat
-                  ? 'bg-neutral-950 border-neutral-950 text-white font-semibold'
-                  : 'bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-        <div className="relative w-full md:w-72 flex-shrink-0">
-          <input
-            type="text"
-            placeholder="Search templates..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full text-xs h-10 pl-9 pr-4 rounded-full bg-white text-neutral-800 placeholder-neutral-400 border border-neutral-200 focus:outline-none focus:border-neutral-400 transition-colors"
-          />
-          <Search className="h-4 w-4 text-neutral-400 absolute left-3 top-3" />
-        </div>
-      </div>
-
-      {/* Count */}
-      <p className="text-xs font-mono text-neutral-500 mb-8 uppercase tracking-wider">
-        {filtered.length} template{filtered.length !== 1 ? 's' : ''} {filter !== 'All' ? `in ${filter}` : ''}
-      </p>
-
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filtered.map((t) => <TemplateCard key={t.id} t={t} />)}
+        {TEMPLATES.map((t) => <TemplateCard key={t.id} t={t} />)}
       </div>
 
       {/* Bottom CTA */}
@@ -195,11 +285,11 @@ export default function TemplatesView() {
             Every template is fully editable
           </h3>
           <p className="text-sm font-light text-neutral-600 mt-2 leading-relaxed">
-            Drag, drop, resize — change colours, fonts, and layout to match your brand exactly. What you see in the editor is exactly what visitors see on your site.
+            Drag, drop, resize — change colours, fonts, and layout to match your brand exactly. What you see in the editor is exactly what your visitors see.
           </p>
         </div>
         <a
-          href={`${DASHBOARD_URL}/sign-up`}
+          href={DASHBOARD_URL}
           className="h-12 px-8 bg-neutral-950 text-white rounded font-mono text-xs font-bold uppercase tracking-wider hover:bg-neutral-800 transition-colors cursor-pointer flex items-center gap-2 shadow-lg whitespace-nowrap"
         >
           Start Building Free <ArrowRight className="h-4 w-4" />
