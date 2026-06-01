@@ -200,7 +200,7 @@ jobs:
           VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
           VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
           VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Pages (production)
         working-directory: apps/dashboard
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
@@ -216,7 +216,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   deploy-dashboard-staging:
-    name: Deploy Dashboard → Cloudflare Pages (staging)
+    name: Deploy Dashboard → Cloudflare Pages (staging — locked to dwain3991@gmail.com)
     runs-on: ubuntu-latest
     needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation]
     if: github.ref == 'refs/heads/dev'
@@ -229,7 +229,7 @@ jobs:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Build dashboard (staging)
+      - name: Build dashboard (staging — access restricted)
         working-directory: apps/dashboard
         run: pnpm build
         env:
@@ -237,7 +237,8 @@ jobs:
           VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
           VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
           VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
-      - name: Deploy to Cloudflare Pages (dev preview)
+          VITE_STAGING_MODE: 'true'
+      - name: Deploy to Cloudflare Pages (staging)
         working-directory: apps/dashboard
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
