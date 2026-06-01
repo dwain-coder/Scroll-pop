@@ -62,7 +62,9 @@ function PopupPreview({ kind, status }: { kind: string; status: string }) {
   );
 }
 function CampaignThumbnail({ config, status, kind }: { config: any; status: string; kind?: string }) {
-  const mainStep = config?.steps?.find((s: any) => s.id === 'main');
+  const mainStep = Array.isArray(config?.steps)
+    ? config.steps.find((s: any) => s.id === 'main')
+    : config?.steps?.main;
   
   if (!mainStep) {
     return <PopupPreview kind={kind ?? 'modal'} status={status} />;
