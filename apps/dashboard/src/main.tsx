@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ClerkProvider, SignedIn, SignedOut, useAuth, useClerk, AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, useAuth, useClerk, useUser, AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
 import { Refine } from '@refinedev/core';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
@@ -26,6 +26,51 @@ import { TermsPage } from './pages/TermsPage';
 import { LicensePage } from './pages/LicensePage';
 
 const IS_DESKTOP_MODE = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
+
+// ─── Staging gate ─────────────────────────────────────────────────────────────
+// Set VITE_STAGING_MODE=true in the staging Cloudflare Pages build env.
+// Only dwain3991@gmail.com can sign in; sign-up is hidden; anyone else is
+// auto-signed-out and shown a locked screen.
+const STAGING_MODE = (import.meta as any).env.VITE_STAGING_MODE === 'true';
+const STAGING_ALLOWED_EMAIL = 'dwain3991@gmail.com';
+
+const StagingGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
+
+  const userEmail = user?.primaryEmailAddress?.emailAddress?.toLowerCase() ?? '';
+  const isAllowed = !user || userEmail === STAGING_ALLOWED_EMAIL;
+
+  React.useEffect(() => {
+    if (!STAGING_MODE || !isLoaded || !user || isAllowed) return;
+    signOut();
+  }, [isLoaded, user, isAllowed, signOut]);
+
+  if (!STAGING_MODE) return <>{children}</>;
+  if (!isLoaded) return null;
+
+  if (!isAllowed) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        minHeight: '100vh', background: 'var(--bg-base, #0a0a0a)', gap: 16, padding: 40, textAlign: 'center',
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%', marginBottom: 8,
+          background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+        }}>🔒</div>
+        <div style={{ fontSize: 18, fontWeight: 600, color: '#fff' }}>Staging — Restricted Access</div>
+        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', maxWidth: 340 }}>
+          This staging environment is locked to authorised developers only.
+          Signing you out…
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+};
 
 const getCampaignDetailId = (path: string) => {
   if (path.startsWith('/campaigns/detail/')) {
@@ -93,9 +138,12 @@ const ClerkAppContent: React.FC = () => {
     // Clerk SSO callback — must be handled before anything else
     if (currentPath.startsWith('/sso-callback')) return <AuthenticateWithRedirectCallback />;
 
-    // Auth routes
+    // Auth routes — sign-up is disabled on staging
     if (currentPath === '/sign-in') return <SignIn isDemo={false} />;
-    if (currentPath === '/sign-up') return <SignUp isDemo={false} />;
+    if (currentPath === '/sign-up') {
+      if (STAGING_MODE) { navigate('/sign-in'); return <SignIn isDemo={false} />; }
+      return <SignUp isDemo={false} />;
+    }
 
     // Protected Admin routes
     return (
@@ -143,12 +191,13 @@ const ClerkAppContent: React.FC = () => {
   };
 
   return (
-    <>
+    <StagingGate>
       <SignedOut>
-        {currentPath === '/sign-up' ? <SignUp isDemo={false} /> : <SignIn isDemo={false} />}
+        {/* On staging, /sign-up redirects to /sign-in in renderRoute above */}
+        {currentPath === '/sign-up' && !STAGING_MODE ? <SignUp isDemo={false} /> : <SignIn isDemo={false} />}
       </SignedOut>
       {renderRoute()}
-    </>
+    </StagingGate>
   );
 };
 
