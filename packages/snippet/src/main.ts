@@ -91,14 +91,15 @@ function getEdgeUrl(): string {
   const w = window as any;
   if (typeof window !== 'undefined' && w.__SP_EDGE_URL) return w.__SP_EDGE_URL;
   try {
+    const cdn = 'cdn.scrollpop.online';
     const cur = document?.currentScript as any;
-    if (cur?.src && typeof cur.src === 'string' && !cur.src.includes('cdn.scrollpop.online')) {
+    if (cur?.src && typeof cur.src === 'string' && !cur.src.includes(cdn)) {
       return new URL(cur.src).origin;
     }
     const scripts = document.getElementsByTagName('script');
     for (let i = 0; i < scripts.length; i++) {
       const src = (scripts[i] as HTMLScriptElement)?.src;
-      if (src?.includes('/p.js') && !src.includes('cdn.scrollpop.online')) {
+      if (src?.includes('/p.js') && !src.includes(cdn)) {
         return new URL(src).origin;
       }
     }
@@ -129,7 +130,7 @@ function evaluateSkipTracking(): void {
 // Returns true if the snippet should abort entirely (e.g. bots)
 function shouldAbortBoot(): boolean {
   const ua = navigator.userAgent;
-  const botPattern = /bot|crawler|spider|crawling|Googlebot|Bingbot|Slurp|DuckDuck|Baidu|YandexBot|Sogou|facebookexternalhit|Twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|developers\.google|headlesschrome/i;
+  const botPattern = /bot|spider|crawl|slurp|headlesschrome|facebookexternalhit|embedly|pinterest|outbrain/i;
   if (botPattern.test(ua) || navigator.webdriver) {
     console.log('[ScrollPop] Bot/crawler detected — aborting boot.');
     return true;
@@ -257,39 +258,31 @@ function evaluateRule(rule: TargetingRule): boolean {
       return isReturning === (value['is_returning'] as boolean);
     }
 
-    case 'geo':
-      // Geo-targeting is typically handled at the edge/Cloudflare level by
-      // discarding the campaign before it even reaches the browser.
-      return true;
+    case 'geo': return true;
 
     case 'session_page_views': {
-      let count = parseInt(sessionStorage.getItem('_sp_page_count') || '0', 10);
-      if (!window.sessionStorage.getItem('_sp_page_counted')) {
-        count += 1;
-        sessionStorage.setItem('_sp_page_count', count.toString());
-        sessionStorage.setItem('_sp_page_counted', '1');
+      let c = +(sessionStorage.getItem('_sp_pc') || 0);
+      if (!sessionStorage.getItem('_sp_pcd')) {
+        sessionStorage.setItem('_sp_pc', ++c + '');
+        sessionStorage.setItem('_sp_pcd', '1');
       }
-      const targetCount = (value['count'] as number) || 0;
-      return count >= targetCount;
+      return c >= +(value['count'] || 0);
     }
 
-    case 'utm': {
-      const source = (value['source'] as string) || '';
-      return window.location.search.toLowerCase().includes(source.toLowerCase());
-    }
+    case 'utm':
+      return location.search.toLowerCase().includes(((value['source'] as string) || '').toLowerCase());
 
     case 'ab_test': {
-      const percent = (value['percent'] as number) || 100;
-      if (percent >= 100) return true;
-      if (percent <= 0) return false;
-      // Store rollout assignment to keep it stable per visitor
-      const abKey = `_sp_ab_${rule.id}`;
-      let assigned = localStorage.getItem(abKey);
-      if (!assigned) {
-        assigned = (Math.random() * 100 <= percent) ? '1' : '0';
-        localStorage.setItem(abKey, assigned);
+      let p = +(value['percent'] || 100);
+      if (p >= 100) return true;
+      if (p <= 0) return false;
+      let k = `_sp_ab_${rule.id}`;
+      let a = localStorage.getItem(k);
+      if (!a) {
+        a = Math.random() * 100 <= p ? '1' : '0';
+        localStorage.setItem(k, a);
       }
-      return assigned === '1';
+      return a === '1';
     }
 
     default:
@@ -369,14 +362,15 @@ function registerTrigger(trigger: TriggerConfig, fire: (meta?: { triggerType: st
 
     // ✅ SAFE: inactivity detection
     case 'inactivity': {
-      const seconds = (trigger.params['seconds'] as number) ?? 60;
-      let timer = setTimeout(() => fire({ triggerType: 'inactivity' }), seconds * 1000);
-      const resetTimer = () => {
-        clearTimeout(timer);
-        timer = setTimeout(() => fire({ triggerType: 'inactivity' }), seconds * 1000);
+      let t: any;
+      const ms = ((trigger.params['seconds'] as number) || 60) * 1000;
+      const r = () => {
+        clearTimeout(t);
+        t = setTimeout(() => fire({ triggerType: 'inactivity' }), ms);
       };
-      ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'].forEach((evt) =>
-        document.addEventListener(evt, resetTimer, { passive: true })
+      r();
+      ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'].forEach((e) =>
+        document.addEventListener(e, r, { passive: true })
       );
       break;
     }
@@ -475,12 +469,12 @@ function setFrequencyCap(campaignId: string, frequency: string): void {
 
 function getShadowCSS(shadow: string | undefined): string {
   switch (shadow) {
-    case 'soft': return '0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03)';
-    case 'medium': return '0 10px 30px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04)';
-    case 'floating': return '0 20px 50px -12px rgba(0, 0, 0, 0.15), 0 8px 24px -4px rgba(0, 0, 0, 0.08)';
-    case 'premium': return '0 30px 70px -10px rgba(0, 0, 0, 0.2), 0 12px 30px -4px rgba(0, 0, 0, 0.1)';
-    case 'glass': return '0 8px 32px 0 rgba(0, 0, 0, 0.08)';
-    case 'dark': return '0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 20px 2px rgba(99, 102, 241, 0.15)';
+    case 'soft': return '0 4px 20px -2px rgba(0,0,0,0.05), 0 2px 8px -1px rgba(0,0,0,0.03)';
+    case 'medium': return '0 10px 30px -4px rgba(0,0,0,0.08), 0 4px 12px -2px rgba(0,0,0,0.04)';
+    case 'floating': return '0 20px 50px -12px rgba(0,0,0,0.15), 0 8px 24px -4px rgba(0,0,0,0.08)';
+    case 'premium': return '0 30px 70px -10px rgba(0,0,0,0.2), 0 12px 30px -4px rgba(0,0,0,0.1)';
+    case 'glass': return '0 8px 32px 0 rgba(0,0,0,0.08)';
+    case 'dark': return '0 20px 40px -10px rgba(0,0,0,0.7), 0 0 20px 2px rgba(99,102,241,0.15)';
     case 'none': return 'none';
     default: return '0 20px 60px rgba(0,0,0,0.3)';
   }
@@ -675,57 +669,55 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   // Build style tag
   htmlChunks.push(`
 <style>
-:host { all: initial; font-family: system-ui, sans-serif; }
-${design.overlayEnabled ? `.overlay { position: fixed; inset: 0; z-index: 2147483646; background: rgba(0,0,0,${design.overlayOpacity ?? 0.5}); animation: sp-fade-in 0.2s ease; }` : ''}
-.popup { position: fixed; z-index: 2147483647; background: ${design.backgroundColor};
-${design.backgroundImage ? `background-image: url(${design.backgroundImage}); background-size: cover; background-position: center; ` : ''}
-color: ${design.textColor}; border-radius: ${design.borderRadius}px; box-shadow: ${getShadowCSS(design.boxShadow)};
-${design.boxShadow === 'glass' ? 'backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); ' : ''}
-margin: ${design.margin ?? '0px'}; width: ${width}; max-width: calc(100vw - 32px); ${positionStyles} animation: ${getAnimation(design.animation)}; overflow: hidden; }
-.popup-inner { padding: ${design.padding ?? '24px'}; display: flex; flex-direction: column; gap: ${design.gap ?? '12px'}; }
-.close-btn { position: absolute; ${design.closeButtonPosition === 'top-right' ? 'top: 12px; right: 12px;' : 'top: 12px; left: 12px;'} background: none; border: none; cursor: pointer; font-size: 18px; color: ${design.textColor}; opacity: 0.6; padding: 4px 8px; border-radius: 4px; z-index: 50; }
-.close-btn:hover { opacity: 1; background: rgba(0,0,0,0.1); }
-.headline { font-size: 20px; font-weight: 700; margin: 0; line-height: 1.3; }
-.subheadline { font-size: 14px; opacity: 0.8; margin: 0; }
-.body-text { font-size: 14px; margin: 0; line-height: 1.5; }
-.product-image { width: 100%; border-radius: 8px; margin: 0; display: block; }
-.email-input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; color: #1f2937; background: #ffffff; outline: none; }
-.email-input:focus { border-color: ${design.accentColor}; }
-.cta-btn { display: inline-block; width: 100%; text-align: center; border: none; cursor: pointer; background: ${design.accentColor}; color: #fff; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 15px; text-decoration: none; box-sizing: border-box; transition: opacity 0.15s; }
-.cta-btn:hover { opacity: 0.9; }
-.cta-link { color: ${design.accentColor}; text-decoration: underline; font-size: 14px; cursor: pointer; }
-.dismiss-text { text-align: center; margin-top: 4px; font-size: 12px; opacity: 0.6; cursor: pointer; }
-.dismiss-text:hover { opacity: 1; }
-.powered-by { text-align: center; margin-top: 4px; font-size: 10px; opacity: 0.4; }
-.gamified-container { display: flex; flex-direction: row; gap: 20px; align-items: center; justify-content: center; }
-.gamified-left { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-.gamified-right { display: flex; align-items: center; justify-content: center; shrink-0; }
-.spin-wrapper { position: relative; width: 220px; height: 220px; background: #1e1b4b; border-radius: 50%; border: 4px solid #312e81; box-shadow: 0 4px 12px rgba(0,0,0,0.3); overflow: hidden; display: flex; align-items: center; justify-content: center; }
-.spin-wheel-svg { width: 100%; height: 100%; transform: rotate(0deg); transition: transform 3s cubic-bezier(0.15, 0.85, 0.25, 1); }
-.spin-peg { position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 14px solid #f59e0b; z-index: 20; }
-.spin-center-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 50%; background: #ffffff; border: 3px solid #1e1b4b; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; color: #1e1b4b; cursor: pointer; z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
-.scratch-container { position: relative; width: 260px; height: 150px; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; background: #000000; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 6px rgba(0,0,0,0.4); }
-.scratch-canvas { position: absolute; inset: 0; cursor: crosshair; z-index: 10; touch-action: none; }
-.scratch-prize { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #ffffff; font-family: monospace; z-index: 1; }
-.success-coupon-box { display: flex; align-items: center; justify-content: center; gap: 8px; border: 2px dashed ${design.accentColor}; border-radius: 8px; padding: 12px; background: rgba(99, 102, 241, 0.05); font-size: 18px; font-weight: 800; font-family: monospace; letter-spacing: 2px; text-align: center; cursor: pointer; transition: background 0.2s; }
-.success-coupon-box:hover { background: rgba(99, 102, 241, 0.1); }
-.success-icon { width: 44px; height: 44px; background: #d1fae5; color: #065f46; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px auto; font-size: 20px; }
-.email-suggest { font-size: 11px; color: ${design.accentColor}; background: rgba(99, 102, 241, 0.08); padding: 6px 12px; border-radius: 6px; margin-top: -4px; margin-bottom: 4px; cursor: pointer; display: none; align-items: center; gap: 4px; font-weight: 600; }
-.email-suggest:hover { background: rgba(99, 102, 241, 0.15); }
-`);
+:host{all:initial;font-family:system-ui,sans-serif;}
+${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,${design.overlayOpacity ?? 0.5});animation:sp-fade-in .2s ease;}` : ''}
+.popup{position:fixed;z-index:2147483647;background:${design.backgroundColor};${design.backgroundImage ? `background-image:url(${design.backgroundImage});background-size:cover;background-position:center;` : ''}color:${design.textColor};border-radius:${design.borderRadius}px;box-shadow:${getShadowCSS(design.boxShadow)};${design.boxShadow === 'glass' ? 'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);' : ''}margin:${design.margin ?? '0px'};width:${width};max-width:calc(100vw - 32px);${positionStyles}animation:${getAnimation(design.animation)};overflow:hidden;}
+.popup-inner{padding:${design.padding ?? '24px'};display:flex;flex-direction:column;gap:${design.gap ?? '12px'};}
+.close-btn{position:absolute;${design.closeButtonPosition === 'top-right' ? 'top:12px;right:12px;' : 'top:12px;left:12px;'}background:none;border:none;cursor:pointer;font-size:18px;color:${design.textColor};opacity:.6;padding:4px 8px;border-radius:4px;z-index:50;}
+.close-btn:hover{opacity:1;background:rgba(0,0,0,.1);}
+.headline{font-size:20px;font-weight:700;margin:0;line-height:1.3;}
+.subheadline{font-size:14px;opacity:.8;margin:0;}
+.body-text{font-size:14px;margin:0;line-height:1.5;}
+.product-image{width:100%;border-radius:8px;margin:0;display:block;}
+.email-input{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid #d1d5db;font-size:14px;color:#1f2937;background:#fff;outline:none;}
+.email-input:focus{border-color:${design.accentColor};}
+.cta-btn{display:inline-block;width:100%;text-align:center;border:none;cursor:pointer;background:${design.accentColor};color:#fff;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px;text-decoration:none;box-sizing:border-box;transition:opacity .15s;}
+.cta-btn:hover{opacity:.9;}
+.cta-link{color:${design.accentColor};text-decoration:underline;font-size:14px;cursor:pointer;}
+.dismiss-text{text-align:center;margin-top:4px;font-size:12px;opacity:.6;cursor:pointer;}
+.dismiss-text:hover{opacity:1;}
+.powered-by{text-align:center;margin-top:4px;font-size:10px;opacity:.4;}
+.gamified-container{display:flex;flex-direction:row;gap:20px;align-items:center;justify-content:center;}
+.gamified-left{flex:1;display:flex;flex-direction:column;gap:10px;}
+.gamified-right{display:flex;align-items:center;justify-content:center;shrink-0;}
+.spin-wrapper{position:relative;width:220px;height:220px;background:#1e1b4b;border-radius:50%;border:4px solid #312e81;box-shadow:0 4px 12px rgba(0,0,0,.3);overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.spin-wheel-svg{width:100%;height:100%;transform:rotate(0deg);transition:transform 3s cubic-bezier(.15,.85,.25,1);}
+.spin-peg{position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid #f59e0b;z-index:20;}
+.spin-center-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #1e1b4b;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#1e1b4b;cursor:pointer;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.2);}
+.scratch-container{position:relative;width:260px;height:150px;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;background:#000;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 2px 6px rgba(0,0,0,.4);}
+.scratch-canvas{position:absolute;inset:0;cursor:crosshair;z-index:10;touch-action:none;}
+.scratch-prize{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;font-family:monospace;z-index:1;}
+.success-coupon-box{display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed ${design.accentColor};border-radius:8px;padding:12px;background:rgba(99,102,241,.05);font-size:18px;font-weight:800;font-family:monospace;letter-spacing:2px;text-align:center;cursor:pointer;transition:background .2s;}
+.success-coupon-box:hover{background:rgba(99,102,241,.1);}
+.success-icon{width:44px;height:44px;background:#d1fae5;color:#065f46;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px auto;font-size:20px;}
+.email-suggest{font-size:11px;color:${design.accentColor};background:rgba(99,102,241,.08);padding:6px 12px;border-radius:6px;margin-top:-4px;margin-bottom:4px;cursor:pointer;display:none;align-items:center;gap:4px;font-weight:600;}
+.email-suggest:hover{background:rgba(99,102,241,.15);}
+</style>
+  `);
 
   // Persistent Teaser Badge Styles
   const isTeaserLeft = design.position === 'bottom-left' || design.position === 'top';
   htmlChunks.push(`
-.teaser-badge { position: fixed; z-index: 2147483647; ${isTeaserLeft ? 'left: 20px;' : 'right: 20px;'} bottom: 20px; background: ${design.accentColor}; color: #ffffff; padding: 10px 18px; border-radius: 9999px; font-weight: 700; font-size: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); cursor: pointer; display: none; align-items: center; gap: 6px; transition: transform 0.2s, opacity 0.2s; }
-.teaser-badge:hover { transform: scale(1.05); }
-@keyframes sp-fade-in { from { opacity: 0 } to { opacity: 1 } }
-@keyframes sp-slide-up { from { opacity: 0; transform: translateY(40px) } to { opacity: 1; transform: translateY(0) } }
-@keyframes sp-slide-down { from { opacity: 0; transform: translateY(-40px) } to { opacity: 1; transform: translateY(0) } }
-@keyframes sp-zoom { from { opacity: 0; transform: scale(0.9) } to { opacity: 1; transform: scale(1) } }
-@keyframes sp-bounce { 0% { opacity:0; transform:translateY(-60px) scale(0.95) } 55% { opacity:1; transform:translateY(12px) scale(1.02) } 75% { transform:translateY(-6px) scale(0.99) } 90% { transform:translateY(3px) scale(1.005) } 100% { opacity:1; transform:translateY(0) scale(1) } }
-@keyframes sp-elastic { 0% { opacity:0; transform:scale(0.4) } 55% { opacity:1; transform:scale(1.08) } 75% { transform:scale(0.96) } 90% { transform:scale(1.02) } 100% { opacity:1; transform:scale(1) } }
-@keyframes sp-flip-in { 0% { opacity:0; transform:perspective(600px) rotateX(-90deg) translateY(-40px) } 60% { opacity:1; transform:perspective(600px) rotateX(8deg) } 80% { transform:perspective(600px) rotateX(-4deg) } 100% { opacity:1; transform:perspective(600px) rotateX(0deg) translateY(0) } }
+<style>
+.teaser-badge{position:fixed;z-index:2147483647;${isTeaserLeft ? 'left:20px;' : 'right:20px;'}bottom:20px;background:${design.accentColor};color:#fff;padding:10px 18px;border-radius:9999px;font-weight:700;font-size:12px;box-shadow:0 10px 30px rgba(0,0,0,.15);cursor:pointer;display:none;align-items:center;gap:6px;transition:transform .2s,opacity .2s;}
+.teaser-badge:hover{transform:scale(1.05);}
+@keyframes sp-fade-in{from{opacity:0}to{opacity:1}}
+@keyframes sp-slide-up{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
+@keyframes sp-slide-down{from{opacity:0;transform:translateY(-40px)}to{opacity:1;transform:translateY(0)}}
+@keyframes sp-zoom{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+@keyframes sp-bounce{0%{opacity:0;transform:translateY(-60px) scale(.95)}55%{opacity:1;transform:translateY(12px) scale(1.02)}75%{transform:translateY(-6px) scale(.99)}90%{transform:translateY(3px) scale(1.005)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes sp-elastic{0%{opacity:0;transform:scale(.4)}55%{opacity:1;transform:scale(1.08)}75%{transform:scale(.96)}90%{transform:scale(1.02)}100%{opacity:1;transform:scale(1)}}
+@keyframes sp-flip-in{0%{opacity:0;transform:perspective(600px) rotateX(-90deg) translateY(-40px)}60%{opacity:1;transform:perspective(600px) rotateX(8deg)}80%{transform:perspective(600px) rotateX(-4deg)}100%{opacity:1;transform:perspective(600px) rotateX(0deg) translateY(0)}}
 </style>
   `);
 
