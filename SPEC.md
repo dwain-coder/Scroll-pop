@@ -27,11 +27,15 @@ publishers displaying product ads that users can choose to engage with.
 - [x] WordPress plugin (thin PHP, injects snippet via wp_head, downloadable from GitHub releases)
 - [x] Shopify App Embed Block (theme extension, Theme Customizer → App Embeds)
 - [x] Raw HTML / Shopify theme.liquid install instructions in dashboard
-- [x] Analytics: impressions, views, clicks, CTR, dismissals (7d/30d/90d selectable)
-    - **Note**: events table is partitioned by month — new partitions must be created in Neon
-      before each calendar month or inserts silently fail (2026 partitions created manually)
-- [x] Stripe billing UI: Upgrade/Downgrade calls real Stripe Checkout; needs `STRIPE_PRICE_*` env vars
-- [x] Edge enforcement: monthly view limit checked before returning campaign config
+- [x] Analytics: impressions, views, clicks, CTR, dismissals (Analytics 7d/30d/90d; Dashboard 7d/30d)
+    - Dashboard + Analytics **auto-refresh in real time** (polling: 15s / 20s)
+    - **Note**: events table is month-partitioned; partitions are now **auto-created on API
+      boot** (`ensure-partitions.ts`) — no manual monthly step required
+- [x] Stripe billing UI: Upgrade/Downgrade calls real Stripe Checkout; **needs live keys +
+      `STRIPE_PRICE_*` env vars before it can charge** (not yet live)
+- [~] Edge enforcement: the API config endpoint checks the monthly view limit and returns an
+      empty config when exceeded; Redis usage metering + Stripe usage-record sync are still
+      partial (Worker-level hard cap is a v2 item — see MASTER §25 B1)
 - [x] Admin dashboard — super-admin panel (email-gated: `dwain3991@gmail.com` only)
 - [x] Cloudflare Worker: snippet CDN + config endpoint + event ingest endpoint (custom domains live)
 
@@ -44,7 +48,7 @@ publishers displaying product ads that users can choose to engage with.
 - Scale/Agency tier Stripe price IDs (need configuring)
 - Compliance Center dashboard
 - Teaser + success step WYSIWYG (snippet uses built-in layout for those two steps, though they can now be optionally disabled)
-- Neon partition auto-creation (manual monthly task until cron is built)
+- Automatic DB migration apply on deploy (migrations are applied to prod manually — see CONTRIBUTING §6; Render Pre-Deploy Command is the recommended hardening)
 
 ---
 
@@ -581,45 +585,31 @@ packages:
 ```
 
 ### CI gates (GitHub Actions)
-1. `lint` — ESLint flat config, all packages
+1. `lint` — all packages (currently a no-op placeholder; typecheck is the real gate)
 2. `typecheck` — TypeScript strict mode, all packages
 3. `test` — Vitest unit tests
 4. `snippet-size-check` — fail if `packages/snippet/dist/p.js` gzipped > 10240 bytes
 5. `no-history-manipulation` — AST check: fail if snippet source contains
    `history.pushState`, `history.replaceState`, `onpopstate`, `popstate`
-6. `e2e` — Playwright against staging (on PRs to main only)
+
+> Playwright E2E is **not** wired (there is no staging environment). It remains a v2 item.
 
 ---
 
 ## Deployment
 
-### API (Fly.io)
-```toml
-# infra/fly/fly.toml
-app = "scrollpop-api"
-primary_region = "iad"
-
-[build]
-  dockerfile = "apps/api/Dockerfile"
-
-[http_service]
-  internal_port = 3001
-  force_https = true
-  auto_stop_machines = true
-  auto_start_machines = true
-  min_machines_running = 1
-
-[[vm]]
-  memory = "512mb"
-  cpu_kind = "shared"
-  cpus = 1
-```
+### API (Render.com)
+The API runs on **Render** (`scroll-pop.onrender.com`, Standard plan — always warm),
+**not** Fly.io. `infra/fly/fly.toml` exists but is unused legacy.
+- Source repo: `dwain-coder/Scroll-pop` (Render auto-deploys on push to `main`).
+- Build: `pnpm --filter api build` · Start: `node apps/api/dist/index.js`
+- Render does **not** run DB migrations — apply them to Neon manually (see CONTRIBUTING §6).
 
 ### Worker (Cloudflare)
-- Deploy via `wrangler deploy` in CI on merge to main
-- KV namespace: `SCROLLPOP_CONFIG` (site config cache)
-- R2 bucket: `scrollpop-snippets` (JS bundles)
-- Routes: `edge.scrollpop.io/*` + `cdn.scrollpop.io/*`
+- Deploy via `wrangler deploy` in CI (from `Dw-Dwain/Scroll-pop`) on merge to main
+- KV namespace: `SCROLLPOP_CONFIG` (site config cache, 60s TTL) — **bound and live**
+- R2 bucket: `scrollpop-snippets` — not yet configured (snippet currently served from the Worker bundle)
+- Custom domains: `edge.scrollpop.online` + `cdn.scrollpop.online`
 
 ### Dashboard (Cloudflare Pages)
 - Build command: `pnpm --filter dashboard build`

@@ -81,6 +81,28 @@ pnpm run deploy
 
 If repos diverge significantly: ask Claude Code to handle the sync.
 
+### 6. Apply database migrations to production ⚠️ MANDATORY when a PR adds one
+
+**Render does NOT run migrations on deploy.** If a merged PR adds a migration
+under `apps/api/drizzle/migrations/` and you don't apply it to the Neon
+production DB, the new API code queries columns/enums that don't exist and
+**every affected request 500s** (the snippet's config endpoint returns 502 → no
+popups, no events, empty analytics). This exact outage happened on June 2 2026
+(`column "interval_days" does not exist`, migration `0005` never applied to prod).
+
+After merging a migration, run its SQL in the **Neon SQL Editor → production
+branch**. Notes:
+- Our migrations use `IF NOT EXISTS` / `ADD VALUE IF NOT EXISTS`, so re-running
+  is safe/idempotent.
+- **Postgres gotcha:** you cannot *use* a new enum value in the same transaction
+  it's added. Run all `ALTER TYPE ... ADD VALUE` statements **first** (one
+  execution), then the `ALTER TABLE` / `CREATE INDEX` statements in a **second**
+  execution.
+- Verify: `SELECT column_name FROM information_schema.columns WHERE table_name = '<table>';`
+
+**Recommended hardening:** set a Render **Pre-Deploy Command** that applies
+pending migrations automatically, so prod can never drift behind the code again.
+
 ---
 
 ## Rollback — if a bad merge reaches `main`
@@ -167,14 +189,16 @@ git push
 # → CI runs → on merge to main → scrollpop.online updates in ~2 min
 ```
 
-### Neon partition reminder ⚠️
+### Neon partition maintenance — now automatic ✅
 
-Before the 1st of each month, run this in the Neon SQL Editor (production branch):
+The `events` table is month-partitioned. The API **auto-creates the current +
+next month's partition on every boot** (`apps/api/src/db/ensure-partitions.ts`),
+so the old "run this before the 1st of each month or analytics dies" chore is no
+longer required. If you ever need to backfill manually:
 ```sql
 CREATE TABLE IF NOT EXISTS events_YYYY_MM PARTITION OF events
-  FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-next-01');
+  FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-(MM+1)-01');
 ```
-(replace YYYY/MM with the upcoming month — e.g. July 2026 = `events_2026_07`)
 
 ---
 
@@ -209,28 +233,26 @@ install flow with a one-click public key copy button.
 
 ---
 
-## Neon DB — monthly partition maintenance
+## Neon DB — monthly partition maintenance (automated)
 
 The `events` table is partitioned by calendar month (`events_YYYY_MM`). PostgreSQL
-**does not auto-create partitions** — inserts for a month with no partition silently fail
-(no error thrown, but the row is dropped). This killed analytics for all of 2026 until
-partitions were created manually.
+**does not auto-create partitions** — historically, inserts for a month with no
+partition silently dropped the row, which killed analytics for all of 2026 until
+partitions were created by hand.
 
-**Before each new month**, run this in the Neon SQL Editor (production branch):
+**This is now handled automatically.** On every boot the API runs
+`ensureEventPartitions()` (`apps/api/src/db/ensure-partitions.ts`), which creates
+the current + next month partitions idempotently (safe no-op where `events` isn't
+range-partitioned). Because the API is always-warm (Render Standard) and also
+restarts on each deploy, the upcoming month's partition is provisioned well ahead
+of the rollover. The `/e` ingest route additionally logs loudly if an insert is
+ever dropped for a missing partition, so it can never fail silently again.
 
-```sql
--- Replace YYYY and MM with the next month
-CREATE TABLE IF NOT EXISTS events_YYYY_MM PARTITION OF events
-  FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-next-month-01');
-```
-
-Example for July 2026:
+Manual backfill (only if you ever need a specific month immediately):
 ```sql
 CREATE TABLE IF NOT EXISTS events_2026_07 PARTITION OF events
   FOR VALUES FROM ('2026-07-01') TO ('2026-08-01');
 ```
-
-A cron job / migration to auto-create future partitions is on the v2 roadmap.
 
 ---
 

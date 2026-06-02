@@ -282,8 +282,8 @@ To edit content: change the relevant TSX file on `dev`, push → Cloudflare Page
 - [x] Upstash Redis instance
 - [x] Cloudflare account (Workers + Pages configured)
 - [x] Shopify Partners app (ScrollPop — Client ID: 37618fc8e087622a64ac244a2edd49f1)
-- [ ] Cloudflare R2 bucket (snippet CDN) — not yet configured
-- [ ] Cloudflare KV namespace — not yet configured
+- [ ] Cloudflare R2 bucket (snippet CDN) — not yet configured (snippet served from Worker bundle)
+- [x] Cloudflare KV namespace `SCROLLPOP_CONFIG` — **bound & live** (id `00a5652f5e9d435bbd1ada64fe089088`, in the deploy account). Edge config cache, 60s TTL.
 - [ ] Stripe account (test + live keys) — pending
 - [ ] Sentry project — pending
 - [ ] PostHog project — pending
@@ -535,7 +535,7 @@ All routes prefixed `/api/v1/`. Auth: Clerk JWT Bearer token (except public rout
 
 **Location:** `packages/snippet/src/main.ts`  
 **Output:** `packages/snippet/dist/p.js` (IIFE, esbuild-minified)  
-**Size target:** ≤10 KB gzipped (currently 8.07 KB ✅)
+**Size target:** ≤10 KB gzipped (currently **10,125 bytes ≈ 9.9 KB ✅** — only ~115 B of headroom; trim before adding features)
 
 ### Lifecycle
 
@@ -1021,9 +1021,22 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 
 ### ✅ Built & Working
 
+#### Live pipeline (verified end-to-end June 2 2026)
+- **Full popup pipeline is live**: snippet → `edge.scrollpop.online/c/:key` (config) →
+  render → `POST /e` (events) → Neon → dashboard. Confirmed on a real customer site:
+  ads rendering, telemetry flowing, analytics populating.
+- **KV edge cache** (`SCROLLPOP_CONFIG`, 60s TTL) bound and live — config served from the
+  edge instead of Worker→Render→Neon on every request.
+- **Dashboard + Analytics auto-refresh in real time** (polling 15s / 20s, pauses when tab
+  hidden) with a "Live" indicator.
+- **events partitions auto-created on API boot** (`ensure-partitions.ts`) — the old manual
+  monthly chore is gone; `/e` logs loudly if a partition is ever missing.
+- **Campaign designer persists the entire left sidebar** (all triggers/targeting + the
+  Display Frequency dropdown) via a `uiTriggers` snapshot in `design.config`.
+
 #### Infrastructure
-- **Render Pro ($25/mo)** — API always warm, zero cold starts; analytics event forwarding
-  is now reliable end-to-end (no more silently dropped events on cold start)
+- **Render Standard** — API always warm, zero cold starts; analytics event forwarding
+  is reliable end-to-end (no more silently dropped events on cold start)
 - **`cdn.scrollpop.online`** — Cloudflare Worker custom domain live; serves the snippet
   (`GET /v1/:key/p.js` → 200, bundle 9.6 KB gzipped)
 - **`edge.scrollpop.online`** — Cloudflare Worker custom domain live; serves site config
@@ -1195,6 +1208,16 @@ Longer-horizon features:
 ---
 
 ## 25. Known Bugs & Tech Debt
+
+### Resolved incident — production migration drift (June 2 2026)
+**Symptom:** live snippet config 502'd on every page (`edge/c/:key`), no popups, no
+events, empty analytics. **Root cause:** migration `0005` (adds
+`frequency_rules.interval_days`) was never applied to the Neon production DB, so the
+config route threw `column "interval_days" does not exist` (PG 42703) → 500 → Worker
+502. **Fix:** applied the pending migration SQL to prod Neon. **Prevention:** migrations
+are now a mandatory documented post-merge step (CONTRIBUTING §6); Render Pre-Deploy
+auto-apply is the recommended hardening. **Lesson:** Render does not run migrations on
+deploy — prod silently drifts behind code on every new migration until applied by hand.
 
 ### Active Bugs
 | # | Severity | Description | Location |
@@ -1435,11 +1458,12 @@ A record of every step taken to go from code to live production. Useful if you e
 
 ### What's Still Pending
 - [ ] Stripe setup (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price IDs) + billing UI
-- [ ] Cloudflare KV namespace → bind `SCROLLPOP_CONFIG` in `wrangler.toml` for edge caching
+- [x] Cloudflare KV namespace `SCROLLPOP_CONFIG` bound in `wrangler.toml` (id `00a5652f…`) — **done, live**
 - [ ] Cloudflare R2 bucket → update `SNIPPET_CDN_URL` to serve from R2 instead of Worker bundle
 - [ ] Sentry DSN → call `Sentry.init()` in API + Dashboard
 - [ ] PostHog → call `posthog.init()` in Dashboard
 - [ ] `api.scrollpop.online` custom domain (Cloudflare DNS → Render)
+- [ ] Render **Pre-Deploy Command** to auto-apply DB migrations (prevents the June 2 migration-drift outage from recurring — see §25)
 
 ---
 
