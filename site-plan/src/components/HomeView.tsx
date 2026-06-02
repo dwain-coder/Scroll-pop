@@ -174,7 +174,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
               </div>
               <h3 className="font-serif text-2xl font-normal text-neutral-900">Avoids the popup tricks Google penalizes</h3>
               <p className="text-neutral-600 text-sm mt-3 font-light leading-relaxed">
-                ScrollPop never uses back-button capture, history manipulation, or popstate listeners — the kind of techniques Google penalizes. Every trigger is scroll-depth, dwell-time, inactivity, or exit-intent (cursor), so popups appear on engagement rather than hijacking navigation.
+                ScrollPop is built to avoid back-button capture, history manipulation, and popstate listeners — the kind of techniques Google penalizes. This is enforced at the code level on every release, not just a policy. Every trigger is scroll-depth, dwell-time, inactivity, or exit-intent (cursor), so popups appear on engagement rather than hijacking navigation.
               </p>
             </div>
             <div className="mt-8 pt-4 border-t border-neutral-200/60 text-xs font-mono text-neutral-500">
@@ -399,7 +399,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
                     ['Core Web Vitals impact','Can add layout shift / slower LCP','Async, Shadow DOM — minimal impact'],
                     ['Visual builder',        'Template-locked or code required', 'Full drag-and-drop canvas'],
                     ['Analytics',             'Basic clicks / opens',             'Impressions, CTR, funnel, device, country'],
-                    ['Back-button / history tricks', 'Some tools rely on them',     'Never — history.pushState blocked by design (CI-enforced)'],
+                    ['Back-button / history tricks', 'Some tools rely on them',     'Blocked at the code level — enforced on every release'],
                     ['WordPress install',     'Plugin (some are bloated)',         'Snippet (free) · WP plugin (paid)'],
                     ['Shopify install',       'App embed or script injection',    'theme.liquid snippet · 1-click app soon'],
                     ['Pricing',               'Usually paid-only',                'Free plan + paid tiers'],

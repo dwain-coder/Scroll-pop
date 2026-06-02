@@ -83,6 +83,11 @@ jobs:
           echo "✅ PASS: Bundle is within size limit"
 
   no-history-manipulation:
+    # ⚠️ MARKETING DEPENDENCY — do not remove or weaken this gate.
+    # The scrollpop.online website states that history manipulation is
+    # "blocked at the code level — enforced on every release".
+    # Removing this check makes that claim false advertising.
+    # If you need to change scope, update site-plan/src/components/HomeView.tsx first.
     name: No history.* / popstate in snippet
     runs-on: ubuntu-latest
     steps:
