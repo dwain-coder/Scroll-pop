@@ -187,7 +187,23 @@ export const shopifyRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── GET /api/v1/shopify/callback ─────────────────────────────────────────
   // Public (called by Shopify redirect). No Clerk auth — verified by HMAC + nonce.
-  fastify.get('/shopify/callback', async (request, reply) => {
+  // Rate limited: legitimate merchants hit this once per install, so 20/min per IP
+  // is generous while blocking floods of crafted HMAC-invalid callback requests (T9).
+  fastify.get('/shopify/callback', {
+    config: {
+      rateLimit: {
+        max: 20,
+        timeWindow: '1 minute',
+        keyGenerator: (req) => req.ip,
+        errorResponseBuilder: (_req, context) => ({
+          error: {
+            code: 'RATE_LIMITED',
+            message: `Too many OAuth callback attempts. Retry after ${context.after}.`,
+          },
+        }),
+      },
+    },
+  }, async (request, reply) => {
     const query = request.query as Record<string, string>;
     const { code, shop, state, timestamp } = query;
 

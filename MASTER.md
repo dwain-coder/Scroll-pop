@@ -1317,7 +1317,7 @@ schema on boot.
 | T6 | Marketing site (`scrollpop.io`) does not exist | — |
 | T7 | `api.scrollpop.io` custom domain not yet configured | Cloudflare DNS |
 | T8 | WordPress plugin `.zip` download URL (`cdn.scrollpop.io/plugins/scrollpop-wp.zip`) returns 404 — file not uploaded to R2 | R2 bucket |
-| T9 | No rate limiting on Shopify OAuth callback — could be flooded by crafted HMAC-invalid requests | `apps/api/src/routes/shopify.ts` |
+| T9 | ✅ Resolved (Jun 2 2026) — Shopify OAuth callback rate limited to 20/min per IP via per-route `@fastify/rate-limit` config | `apps/api/src/routes/shopify.ts` |
 | T10 | `weight` field on affiliate slots is in schema but the Campaign Wizard UI doesn't expose it — defaults to 1 for all slots | Dashboard CampaignWizard |
 
 ---
