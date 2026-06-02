@@ -25,7 +25,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
     {
       id: 'faq_1',
       category: 'product',
-      question: 'How is ScrollPop different from Privy, OptinMonster or Poptin?',
+      question: 'How is ScrollPop different from other popup tools?',
       answer: 'Many popup tools can ship 100 KB+ of external JavaScript, which may affect Core Web Vitals. ScrollPop\'s snippet is ~10KB gzipped, loads asynchronously after the page is interactive (using requestIdleCallback), and renders entirely inside a Shadow DOM — so it never touches your host page CSS. You get a full visual drag-and-drop builder, real analytics, and campaign management, designed to minimise page-speed impact.'
     },
     {
@@ -402,7 +402,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
                     ['Back-button / history tricks', 'Some tools rely on them',     'Never — history.pushState blocked by design (CI-enforced)'],
                     ['WordPress install',     'Plugin (some are bloated)',         'Snippet (free) · WP plugin (paid)'],
                     ['Shopify install',       'App embed or script injection',    'theme.liquid snippet · 1-click app soon'],
-                    ['Pricing',               '$29–$199/mo',                      'Free → $19–$299/mo'],
+                    ['Pricing',               'Usually paid-only',                'Free plan + paid tiers'],
                   ].map(([feature, competitor, us]) => (
                     <tr key={feature}>
                       <td className="p-5 font-normal text-neutral-900 text-xs">{feature}</td>
