@@ -1,12 +1,12 @@
 import { useState, FormEvent } from 'react';
 import { ActivePage, FAQItem } from '../types';
 import ScrollPopDemo from './ScrollPopDemo';
+import RevealSection from './RevealSection';
 import {
   Sparkles, ArrowRight, Gauge, Layers, ShieldCheck, Zap,
   CheckCircle, HelpCircle, ChevronDown, Check,
   ShoppingBag, Globe
 } from 'lucide-react';
-import { motion } from 'motion/react';
 
 const DASHBOARD_URL = 'https://dashboard.scrollpop.online';
 
@@ -63,7 +63,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
     <div className="font-sans text-neutral-800 z-10 relative">
 
       {/* 1. HERO */}
-      <section className="relative pt-12 md:pt-20 pb-20 overflow-hidden bg-transparent">
+      <RevealSection className="relative pt-12 md:pt-20 pb-20 overflow-hidden bg-transparent">
         <div className="max-w-7xl mx-auto px-6 text-center">
 
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-neutral-100 border border-neutral-200 rounded-full shadow-xs mb-8">
@@ -101,10 +101,10 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             <ScrollPopDemo />
           </div>
         </div>
-      </section>
+      </RevealSection>
 
       {/* 2. TRUST STRIP */}
-      <section className="bg-transparent py-14 border-y border-neutral-200/60">
+      <RevealSection className="bg-transparent py-14 border-y border-neutral-200/60">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-500 mb-8 font-medium">
             RUNS ON WORDPRESS, SHOPIFY, DONORBOX, GOFUNDME, AND ANY HTML SITE
@@ -117,10 +117,10 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             <span className="font-serif text-xl md:text-2xl font-semibold text-neutral-800">HTML/JS</span>
           </div>
         </div>
-      </section>
+      </RevealSection>
 
       {/* 3. FEATURE BENTO GRID */}
-      <section className="py-24 max-w-7xl mx-auto px-6">
+      <RevealSection className="py-24 max-w-7xl mx-auto px-6">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block mb-3">PLATFORM CAPABILITIES</span>
           <h2 className="font-serif text-3xl md:text-5xl font-normal tracking-tight text-gradient">
@@ -200,10 +200,10 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             </div>
           </div>
         </div>
-      </section>
+      </RevealSection>
 
       {/* 4. HOW IT WORKS */}
-      <section className="py-24 bg-transparent border-y border-neutral-200/60">
+      <RevealSection className="py-24 bg-transparent border-y border-neutral-200/60">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center max-w-2xl mx-auto mb-20">
             <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] block mb-3 font-semibold">GETTING STARTED</span>
@@ -245,10 +245,10 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             </div>
           </div>
         </div>
-      </section>
+      </RevealSection>
 
       {/* 5. TEMPLATE SHOWCASE */}
-      <section className="py-24 max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+      <RevealSection className="py-24 max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
         <div className="lg:col-span-5 flex flex-col gap-6">
           <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block">38+ TEMPLATES</span>
           <h2 className="font-serif text-3xl md:text-5xl font-normal text-neutral-900 tracking-tight leading-none">
@@ -294,10 +294,10 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             </div>
           ))}
         </div>
-      </section>
+      </RevealSection>
 
       {/* 6. PLATFORMS */}
-      <section className="py-24 bg-transparent border-y border-neutral-200/60">
+      <RevealSection className="py-24 bg-transparent border-y border-neutral-200/60">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
             <div className="p-8 md:p-12 rounded-2xl glass flex flex-col gap-6 hover:border-neutral-300 transition-all">
@@ -327,10 +327,10 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             </div>
           </div>
         </div>
-      </section>
+      </RevealSection>
 
       {/* 7. PERFORMANCE */}
-      <section className="py-24 max-w-7xl mx-auto px-6">
+      <RevealSection className="py-24 max-w-7xl mx-auto px-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-5 flex flex-col gap-6 pb-6 lg:pb-0">
             <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block">PERFORMANCE</span>
@@ -372,10 +372,10 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             </div>
           </div>
         </div>
-      </section>
+      </RevealSection>
 
       {/* 8. COMPARISON TABLE */}
-      <section className="py-24 bg-transparent border-y border-neutral-200/60">
+      <RevealSection className="py-24 bg-transparent border-y border-neutral-200/60">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block mb-3">WHY SCROLLPOP</span>
@@ -415,10 +415,10 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             </div>
           </div>
         </div>
-      </section>
+      </RevealSection>
 
       {/* 10. FAQ */}
-      <section className="py-24 bg-transparent border-y border-neutral-200/60">
+      <RevealSection className="py-24 bg-transparent border-y border-neutral-200/60">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block mb-3">FAQ</span>
@@ -446,10 +446,10 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             })}
           </div>
         </div>
-      </section>
+      </RevealSection>
 
       {/* 11. FINAL CTA */}
-      <section className="py-24 max-w-4xl mx-auto px-6 text-center flex flex-col items-center gap-6">
+      <RevealSection className="py-24 max-w-4xl mx-auto px-6 text-center flex flex-col items-center gap-6">
         <span className="text-xs font-mono uppercase tracking-widest text-neutral-800 font-bold block bg-neutral-100 border border-neutral-200 py-1.5 px-4 rounded-full shadow-xs">
           FREE PLAN · NO CARD REQUIRED
         </span>
@@ -488,7 +488,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             </p>
           </div>
         )}
-      </section>
+      </RevealSection>
 
     </div>
   );
