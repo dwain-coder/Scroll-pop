@@ -83,11 +83,11 @@ async function handleConfig(
   if (env.SCROLLPOP_CONFIG) {
     const cached = await env.SCROLLPOP_CONFIG.get(kvKey, 'text');
     if (cached) {
-      return new Response(withGeo(cached, request), {
+      return new Response(await augmentConfig(cached, request, env), {
         headers: {
           'Content-Type': 'application/json',
-          // private: the body is augmented per-request with the visitor's country,
-          // so it must not be shared-cached across visitors.
+          // private: the body is augmented per-request with the visitor's country +
+          // live view-cap enforcement, so it must not be shared-cached across visitors.
           'Cache-Control': 'private, max-age=60',
           'X-Cache': 'HIT',
           ...CORS_HEADERS,
@@ -141,7 +141,7 @@ async function handleConfig(
     );
   }
 
-  return new Response(withGeo(configJson, request), {
+  return new Response(await augmentConfig(configJson, request, env), {
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': 'private, max-age=60',
@@ -152,22 +152,60 @@ async function handleConfig(
 }
 
 /**
- * Inject the visitor's country (ISO 3166-1 alpha-2 from Cloudflare) into the config
- * payload so the snippet can evaluate geo targeting. Done per-request AFTER the KV
- * read, so the shared KV cache stays geo-free. Cheap JSON round-trip on a small object.
+ * Per-request augmentation of the config payload (done AFTER the KV read so the shared
+ * cache stays generic). Two jobs in one JSON round-trip:
+ *  1. Inject the visitor's country (CF-IPCountry) for geo targeting.
+ *  2. Enforce the monthly view cap in REAL TIME against the live Redis counter — this
+ *     closes the up-to-60s overage window where a KV-cached config would keep serving
+ *     popups after a tenant crossed its limit mid-cache. Fail OPEN on any error.
+ * The internal tenantId / monthlyViewLimit fields are STRIPPED before returning so they
+ * never reach the browser.
  */
-function withGeo(configJson: string, request: Request): string {
+async function augmentConfig(configJson: string, request: Request, env: Env): Promise<string> {
+  let c: Record<string, unknown>;
+  try { c = JSON.parse(configJson); } catch { return configJson; }
+
+  // 1. Geo
   const country =
     ((request as { cf?: { country?: string } }).cf?.country) ||
     request.headers.get('CF-IPCountry') ||
     '';
-  if (!country || country === 'XX' || country === 'T1') return configJson; // unknown/Tor
+  if (country && country !== 'XX' && country !== 'T1') c.geo = { country };
+
+  // 2. Real-time view-cap enforcement
+  const tenantId = c['tenantId'] as string | undefined;
+  const limit = c['monthlyViewLimit'] as number | undefined;
+  const campaigns = c['campaigns'] as unknown[] | undefined;
+  if (tenantId && typeof limit === 'number' && limit > 0 && Array.isArray(campaigns) && campaigns.length > 0) {
+    const used = await readMonthlyViews(env, tenantId);
+    if (used !== null && used >= limit) {
+      c['campaigns'] = [];
+      c['limitExceeded'] = true;
+    }
+  }
+  // Strip internal-only fields — never expose to the browser.
+  delete c['tenantId'];
+  delete c['monthlyViewLimit'];
+
+  return JSON.stringify(c);
+}
+
+/**
+ * Read this tenant's current-month impression count from the Upstash Redis REST API.
+ * Returns null on any failure (missing creds, network error) so the caller fails OPEN.
+ */
+async function readMonthlyViews(env: Env, tenantId: string): Promise<number | null> {
+  if (!env.REDIS_URL || !env.REDIS_TOKEN) return null;
+  const month = new Date().toISOString().slice(0, 7); // "YYYY-MM"
   try {
-    const c = JSON.parse(configJson);
-    c.geo = { country };
-    return JSON.stringify(c);
+    const res = await fetch(`${env.REDIS_URL}/get/sp_views:${tenantId}:${month}`, {
+      headers: { Authorization: `Bearer ${env.REDIS_TOKEN}` },
+    });
+    if (!res.ok) return null;
+    const body = await res.json() as { result?: string | null };
+    return body.result != null ? (parseInt(body.result, 10) || 0) : 0;
   } catch {
-    return configJson;
+    return null;
   }
 }
 

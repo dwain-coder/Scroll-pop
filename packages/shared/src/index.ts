@@ -143,6 +143,10 @@ export interface SiteConfigPayload {
   plan: 'free' | 'starter' | 'growth' | 'scale' | 'agency';
   /** Strict opt-in: when true the snippet records no analytics until the host grants consent. */
   requireConsent?: boolean;
+  /** Internal (edge-only): the edge Worker uses these to enforce the monthly view cap in
+   *  real time, then STRIPS them before the response reaches the browser. Never sent to the snippet. */
+  tenantId?: string;
+  monthlyViewLimit?: number;
   campaigns: Array<{
     id: string;
     design: DesignConfig;

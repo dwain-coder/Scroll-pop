@@ -1336,7 +1336,7 @@ schema on boot.
 ### Active Bugs
 | # | Severity | Description | Location |
 |---|---|---|---|
-| B1 | High | View cap not enforced at Worker level — paid users can go over their plan limit silently | `apps/worker/src/index.ts` |
+| B1 | ✅ Resolved (Jun 3 2026) | View cap now enforced at the **edge on every config request**. The API config payload carries internal `tenantId` + `monthlyViewLimit`; the Worker reads the live `sp_views:{tenant}:{month}` counter from Upstash REST and empties `campaigns` when over limit, then **strips** those internal fields before responding. Closes the up-to-60s overage window of the old cache-miss-only check (which remains as defence-in-depth). **Fails OPEN** if the Worker can't reach Redis. ⚠️ Requires `REDIS_URL`/`REDIS_TOKEN` set as Worker secrets (see `wrangler.toml`) — without them the edge check no-ops and only the API cache-miss check applies. | `apps/worker/src/index.ts` |
 | B2 | High | Stripe usage records not synced — overage billing doesn't work | `apps/api/src/routes/billing.ts` |
 | B3 | Medium | `tenants.deleted_at` check missing in some tenant queries | `apps/api/src/plugins/tenant-context.ts` |
 | B4 | Medium | No retry logic on Redis event queue flush — events can be lost if DB is down during flush | `apps/api/src/routes/internal.ts` |

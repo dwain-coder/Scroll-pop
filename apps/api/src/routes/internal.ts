@@ -175,6 +175,12 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
         siteId: site.id,
         plan: (tenant?.plan ?? 'free') as SiteConfigPayload['plan'],
         requireConsent,
+        // Internal (edge-only) — the Worker enforces the cap on every request in real time
+        // then strips these before responding to the browser. This closes the up-to-60s
+        // overage window where a KV-cached config keeps serving after a tenant crosses the
+        // limit mid-cache. The API check above remains as defence-in-depth (cache-miss path).
+        tenantId: site.tenantId,
+        monthlyViewLimit: tenant?.monthlyViewLimit ?? 0,
         campaigns: validCampaigns as SiteConfigPayload['campaigns'],
         version,
       };
