@@ -24,6 +24,8 @@ interface AffiliateSlot {
   cta_text: string;
   weight: number;
   coupon?: string;
+  price?: string;
+  short_description?: string;
 }
 
 interface TriggerConfig {

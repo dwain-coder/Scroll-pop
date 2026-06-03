@@ -1373,7 +1373,21 @@ Deleted campaigns/sites used to keep showing their events in analytics/dashboard
 | T7 | `api.scrollpop.io` custom domain not yet configured | Cloudflare DNS |
 | T8 | WordPress plugin `.zip` download URL (`cdn.scrollpop.io/plugins/scrollpop-wp.zip`) returns 404 — file not uploaded to R2 | R2 bucket |
 | T9 | ✅ Resolved (Jun 2 2026) — Shopify OAuth callback rate limited to 20/min per IP via per-route `@fastify/rate-limit` config | `apps/api/src/routes/shopify.ts` |
-| T10 | `weight` field on affiliate slots is in schema but the Campaign Wizard UI doesn't expose it — defaults to 1 for all slots | Dashboard CampaignWizard |
+| T10 | `weight` field on affiliate slots is in schema but no UI exposes it. Part of the in-progress **Affiliate ad templates (#9)** work — see §23. | Dashboard |
+
+### Affiliate ad templates (#9) — in progress (Jun 3 2026)
+**Foundation shipped:** `AffiliateSlotSchema` (shared) + snippet `AffiliateSlot` now have
+optional `price` and `short_description` (JSONB — no migration). **Remaining sub-tasks**
+(deferred to a fresh session): product-card popup template in the gallery; a reusable
+"product card" builder block bound to slot fields; snippet rendering of the card
+(image/name/price/short-desc/CTA); and a multi-slot **weight editor** UI (slots are
+currently created one-at-a-time by the wizard with `weight:100`).
+⏸ **Affiliate-network auto-pull (deferred v2/v3):** auto-populating product image/name/
+price from Amazon PA-API / Rakuten product APIs is a separate integration — each needs the
+operator's own approved API credentials + per-network approval + rate-limit handling. The
+stored affiliate "keys" today are link-tagging IDs, NOT product-API access. Auto-pull would
+fill the same `price`/`short_description`/`image_url` fields the foundation adds. The lighter
+page-scrape path (`detectSmartProduct`) already exists for host-page product schema.
 
 ---
 

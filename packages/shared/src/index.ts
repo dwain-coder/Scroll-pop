@@ -53,6 +53,10 @@ export const AffiliateSlotSchema = z.object({
   cta_text: z.string().min(1).max(100),
   weight: z.number().int().min(1).max(100).default(1),
   coupon: z.string().max(50).optional(),
+  // Product-card fields (optional). Used by the affiliate product-card template/block.
+  // Free-text price so operators can format it ("$49.99", "£40", "From $19/mo").
+  price: z.string().max(40).optional(),
+  short_description: z.string().max(280).optional(),
 });
 
 export const DesignConfigSchema = z.object({
