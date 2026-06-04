@@ -12,6 +12,7 @@ import { ensureEventPartitions } from './db/ensure-partitions.js';
 import { ensureNotificationsSchema } from './db/ensure-notifications.js';
 import { ensureAuditLogSchema } from './db/ensure-audit-log.js';
 import { ensureLeadsSchema } from './db/ensure-leads.js';
+import { ensureVariantsSchema } from './db/ensure-variants.js';
 import { startDeletedDataPurge } from './db/purge-deleted.js';
 import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants, leads } from './db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -29,6 +30,7 @@ import { webhookRoutes } from './routes/webhooks.js';
 import { internalRoutes } from './routes/internal.js';
 import { notificationRoutes, emitNotification } from './routes/notifications.js';
 import { leadRoutes } from './routes/leads.js';
+import { variantRoutes } from './routes/variants.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
@@ -140,6 +142,7 @@ async function bootstrap() {
   await app.register(analyticsRoutes, { prefix: '/api/v1' });
   await app.register(notificationRoutes, { prefix: '/api/v1' });
   await app.register(leadRoutes, { prefix: '/api/v1' });
+  await app.register(variantRoutes, { prefix: '/api/v1' });
   await app.register(opsRoutes, { prefix: '/api/v1' });
   await app.register(adminRoutes, { prefix: '/api/v1' });
   await app.register(journeyRoutes, { prefix: '/api/v1' });
@@ -675,6 +678,9 @@ async function bootstrap() {
   // Ensure leads schema (migration 0009) so lead capture + the Leads page work even if the
   // migration hasn't been applied to prod by hand yet.
   await ensureLeadsSchema(app.log);
+  // Ensure variants schema (migration 0010) so A/B testing works even if the migration
+  // hasn't been applied to prod by hand yet.
+  await ensureVariantsSchema(app.log);
 
   const port = parseInt(process.env['PORT'] ?? '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });

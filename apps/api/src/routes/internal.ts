@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../db/client.js';
-import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants } from '../db/schema.js';
+import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants, variants } from '../db/schema.js';
 import { eq, and, isNull, sql, gte, inArray } from 'drizzle-orm';
 import type { SiteConfigPayload } from '@scrollpop/shared';
 import crypto from 'node:crypto';
@@ -130,22 +130,29 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (campaignIds.length > 0) {
         const tid = site.tenantId;
-        const [allDesigns, allTriggers, allTargeting, allFreq] = await Promise.all([
+        const [allDesigns, allTriggers, allTargeting, allFreq, allVariants] = await Promise.all([
           db.query.designs.findMany({ where: and(inArray(designs.campaignId, campaignIds), eq(designs.tenantId, tid)) }),
           db.query.triggers.findMany({ where: and(inArray(triggers.campaignId, campaignIds), eq(triggers.tenantId, tid)) }),
           db.query.targetingRules.findMany({ where: and(inArray(targetingRules.campaignId, campaignIds), eq(targetingRules.tenantId, tid)) }),
           db.query.frequencyRules.findMany({ where: and(inArray(frequencyRules.campaignId, campaignIds), eq(frequencyRules.tenantId, tid)) }),
+          db.query.variants.findMany({ where: and(inArray(variants.campaignId, campaignIds), eq(variants.tenantId, tid)) }),
         ]);
 
         const designByCampaign = new Map(allDesigns.map((d) => [d.campaignId, d]));
         const freqByCampaign = new Map(allFreq.map((f) => [f.campaignId, f]));
         const triggersByCampaign = groupByCampaignId(allTriggers);
         const targetingByCampaign = groupByCampaignId(allTargeting);
+        const variantsByCampaign = groupByCampaignId(allVariants);
 
         validCampaigns = activeCampaigns
           .map((campaign) => {
             const design = designByCampaign.get(campaign.id);
             if (!design) return null;
+            // A/B: when a campaign has variants (with weight > 0), the snippet allocates a
+            // visitor to one and renders its design instead of the base design.
+            const vs = (variantsByCampaign.get(campaign.id) ?? [])
+              .filter((v) => v.weight > 0)
+              .map((v) => ({ id: v.id, weight: v.weight, design: v.config, affiliateSlots: v.affiliateSlots }));
             return {
               id: campaign.id,
               design: design.config,
@@ -153,6 +160,7 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
               targeting: (targetingByCampaign.get(campaign.id) ?? []).map((r) => ({ id: r.id, kind: r.kind, operator: r.operator, value: r.value })),
               frequency: { frequency: freqByCampaign.get(campaign.id)?.frequency ?? 'once_per_session' },
               affiliateSlots: design.affiliateSlots,
+              ...(vs.length > 0 ? { variants: vs } : {}),
             };
           })
           .filter(Boolean) as SiteConfigPayload['campaigns'];

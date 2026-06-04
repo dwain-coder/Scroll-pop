@@ -1752,26 +1752,16 @@ export default function SidebarLeft({
                 <p className="text-[10.5px] text-zinc-600 leading-normal">The popup only fires within this window, evaluated in each <strong className="text-zinc-400">visitor's local time</strong>. Leave a field empty for no bound (starts now / never expires).</p>
               </div>
 
-              {/* 10. A/B Test Percentage */}
-              <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-zinc-400" />
-                    <span className="text-xs font-semibold text-zinc-100">A/B Test Rollout</span>
-                  </div>
-                  <span className="text-[11px] font-mono font-medium text-zinc-100 bg-zinc-800 px-2 py-0.5 rounded">
-                    {(campaign.triggers as any).abTestPercent ?? 100}% of visitors
-                  </span>
+              {/* 10. A/B Testing — now handled by real weighted variants on Campaign Detail */}
+              <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-zinc-400" />
+                  <span className="text-xs font-semibold text-zinc-100">A/B Testing</span>
                 </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="100"
-                  value={(campaign.triggers as any).abTestPercent ?? 100}
-                  onChange={(e) => onUpdateTriggers('abTestPercent', parseInt(e.target.value))}
-                  className="w-full accent-indigo-500 cursor-pointer h-1 bg-zinc-700 rounded-lg"
-                />
-                <p className="text-[10.5px] text-zinc-600 leading-normal">Only show this campaign to a percentage of your audience — for split testing.</p>
+                <p className="text-[10.5px] text-zinc-600 leading-normal">
+                  Run real split tests with weighted variants from the <strong className="text-zinc-400">A/B Test</strong> panel
+                  on the campaign's detail page — create variants, set their traffic split, and compare results per variant.
+                </p>
               </div>
 
               {/* 11. Frequency Cap */}

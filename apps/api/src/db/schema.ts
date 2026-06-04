@@ -113,6 +113,23 @@ export const adminAuditLog = pgTable('admin_audit_log', {
     .default(sql`NOW()`),
 });
 
+// ─── A/B Variants ─────────────────────────────────────────────────────────────
+// Alternative designs for a campaign, served by weight. When a campaign has variants the
+// snippet allocates a visitor to one (sticky) and renders that variant's design instead of
+// the base design. Tenant-scoped (RLS). See CTO-AUDIT P0-4 / P1-10.
+
+export const variants = pgTable('variants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  campaignId: uuid('campaign_id').notNull(),
+  name: text('name').notNull(),
+  weight: integer('weight').notNull().default(50),
+  config: jsonb('config').notNull().default({}),
+  affiliateSlots: jsonb('affiliate_slots').notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`NOW()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`NOW()`),
+});
+
 // ─── Leads ──────────────────────────────────────────────────────────────────────
 // Captured email/form submissions from popups. Populated from the `/e` ingest path when a
 // conversion event carries an email. Tenant-scoped (RLS). See CTO-AUDIT P0-3.

@@ -123,7 +123,8 @@ const getCampaignDetailId = (path: string) => {
 };
 
 const getCampaignDesignId = (path: string) => {
-  const m = path.match(/^\/campaigns\/([^/]+)\/design$/);
+  // Tolerate an optional query string (e.g. ?variant=<id> for A/B variant editing).
+  const m = path.match(/^\/campaigns\/([^/?]+)\/design(?:\?.*)?$/);
   return m ? m[1] : null;
 };
 

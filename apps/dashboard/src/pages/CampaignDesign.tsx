@@ -396,8 +396,12 @@ function mapCampaignToDesign(campaign: Campaign) {
 export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNavigate }) => {
   const { data: campaignData, isLoading: isCampaignLoading, isError: isCampaignError } = useOne({ resource: 'campaigns', id: campaignId });
   const apiUrl = useApiUrl();
+  // A/B variant editing: when ?variant=<id> is present this builder edits that variant's design
+  // (loaded from / saved to /variants/:id) instead of the campaign's base design. Triggers/
+  // targeting/frequency are campaign-level and are not touched in variant mode.
+  const variantId = React.useMemo(() => new URLSearchParams(window.location.search).get('variant') || undefined, []);
   const { data: designData, isLoading: isDesignLoading, isError: isDesignError } = useCustom({
-    url: `${apiUrl}/campaigns/${campaignId}/design`,
+    url: variantId ? `${apiUrl}/variants/${variantId}` : `${apiUrl}/campaigns/${campaignId}/design`,
     method: 'get',
   });
   const { data: triggersData, isLoading: isTriggersLoading } = useCustom({
@@ -680,6 +684,26 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     // affiliate slots live on the design record, not on the Campaign canvas object.
     designPayload.affiliateSlots = (designData?.data as any)?.affiliateSlots ?? [];
 
+    // A/B variant mode: save only the design to the variant; triggers/targeting/frequency are
+    // campaign-level and shared across variants, so they're left untouched here.
+    if (variantId) {
+      mutate(
+        { url: `${apiUrl}/variants/${variantId}`, method: 'put', values: { config: designPayload.config, affiliateSlots: designPayload.affiliateSlots } },
+        {
+          onSuccess: () => {
+            setIsSaving(false);
+            toastMessage('💾 Variant saved!');
+            setTimeout(() => onNavigate(`/campaigns/detail/${campaignId}`), 700);
+          },
+          onError: () => {
+            setIsSaving(false);
+            toastMessage('❌ Error: Failed to save variant.');
+          },
+        }
+      );
+      return;
+    }
+
     const t = campaign.triggers;
     const triggersList: Array<{ type: string; params: Record<string, number> }> = [];
     if (t) {
@@ -696,7 +720,8 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
       if (t.geoTargeting && t.geoTargeting !== 'All Countries') targetingList.push({ kind: 'geo', operator: 'include', value: { country: t.geoTargeting } });
       if (t.sessionPageCount > 0) targetingList.push({ kind: 'session_page_views', operator: 'include', value: { count: t.sessionPageCount } });
       if (t.utmValue && t.utmValue.trim() !== '') targetingList.push({ kind: 'utm', operator: 'include', value: { param: t.utmParam || 'utm_source', value: t.utmValue.trim() } });
-      if (t.abTestPercent < 100) targetingList.push({ kind: 'ab_test', operator: 'include', value: { percent: t.abTestPercent } });
+      // Real A/B is now handled by the variants system (see the A/B Test panel on Campaign
+      // Detail). The old single-percentage ab_test gate has been removed (P0-4).
     }
 
     // Persist the Display Frequency dropdown exactly as chosen (was previously derived from
