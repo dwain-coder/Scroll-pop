@@ -25,6 +25,14 @@ custom_domain = true
 pattern = "edge.scrollpop.online"
 custom_domain = true
 
+# ── R2 Bucket: snippet CDN ────────────────────────────────────────────────────
+# Serves packages/snippet/dist/p.js as the public snippet bundle.
+# Upload new builds via CI: wrangler r2 object put scrollpop-assets/p.js --file packages/snippet/dist/p.js
+# The Worker falls back to the bundled p.txt if the R2 object is missing.
+[[r2_buckets]]
+binding = "SNIPPET_BUCKET"
+bucket_name = "scrollpop-assets"
+
 # ── KV Namespace: campaign config cache ───────────────────────────────────────
 # Edge cache for site config (60s TTL). The Worker reads/writes this in
 # handleConfig() — a cache hit avoids the Worker→API→DB round-trip entirely.

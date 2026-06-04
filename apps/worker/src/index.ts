@@ -13,8 +13,8 @@ import * as Sentry from '@sentry/cloudflare';
 import snippetCode from './p.txt';
 
 export interface Env {
-  // Optional: when no KV namespace is bound, config is served uncached from origin.
   SCROLLPOP_CONFIG?: KVNamespace;
+  SNIPPET_BUCKET?: R2Bucket;
   API_ORIGIN: string;
   REDIS_URL: string;
   REDIS_TOKEN: string;
@@ -42,16 +42,21 @@ export default Sentry.withSentry(
       return new Response(null, { headers: CORS_HEADERS });
     }
 
-    // GET /v1/:publicKey/p.js — serve the snippet
+    // GET /v1/:publicKey/p.js — serve the snippet (R2 preferred, bundled fallback)
     if (request.method === 'GET' && url.pathname.endsWith('/p.js')) {
-      return new Response(snippetCode, {
-        headers: {
-          'Content-Type': 'application/javascript',
-          'X-Content-Type-Options': 'nosniff',
-          ...CORS_HEADERS,
-          'Cache-Control': 'public, max-age=300'
+      const snippetHeaders = {
+        'Content-Type': 'application/javascript',
+        'X-Content-Type-Options': 'nosniff',
+        ...CORS_HEADERS,
+        'Cache-Control': 'public, max-age=300',
+      };
+      if (env.SNIPPET_BUCKET) {
+        const obj = await env.SNIPPET_BUCKET.get('p.js');
+        if (obj) {
+          return new Response(obj.body, { headers: snippetHeaders });
         }
-      });
+      }
+      return new Response(snippetCode, { headers: snippetHeaders });
     }
 
     // GET /c/:publicKey — config endpoint
