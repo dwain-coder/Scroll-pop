@@ -412,7 +412,7 @@ async function bootstrap() {
   // lookup on the hot ingest path (the API is always-warm on Render). Short TTL so deletes/moves
   // propagate. The site domains are carried so the ingest path can verify an event's origin.
   type CampaignMeta = {
-    tenantId: string; siteId: string;
+    tenantId: string; siteId: string; platform: string;
     domain: string | null; shopifyShop: string | null; wpSiteUrl: string | null;
   };
   const campaignMetaCache = new Map<string, CampaignMeta & { exp: number }>();
@@ -424,11 +424,12 @@ async function bootstrap() {
     if (!campaign) return null;
     const site = await db.query.sites.findFirst({
       where: eq(sites.id, campaign.siteId),
-      columns: { domain: true, shopifyShop: true, wpSiteUrl: true },
+      columns: { platform: true, domain: true, shopifyShop: true, wpSiteUrl: true },
     });
     const meta: CampaignMeta = {
       tenantId: campaign.tenantId,
       siteId: campaign.siteId,
+      platform: site?.platform ?? 'other',
       domain: site?.domain ?? null,
       shopifyShop: site?.shopifyShop ?? null,
       wpSiteUrl: site?.wpSiteUrl ?? null,
@@ -450,6 +451,11 @@ async function bootstrap() {
     return labels.length <= 2 ? labels.join('.') : labels.slice(-2).join('.');
   }
   function eventOriginAllowed(pageUrl: string | null, meta: CampaignMeta): boolean {
+    // Only enforce for platforms where the registered domain reliably equals the serving
+    // domain. Shopify storefronts run on custom domains we don't store, donation platforms
+    // (donorbox/gofundme) and "other" are likewise served from domains we can't predict — so
+    // enforcing there would drop legitimate traffic. Those rely on the per-IP flood gate.
+    if (meta.platform !== 'html' && meta.platform !== 'wordpress') return true;
     if (!pageUrl) return true;
     let host: string;
     try { host = new URL(pageUrl).hostname; } catch { return true; }
