@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Eye, Globe, Megaphone, MousePointerClick, Percent, Radar, Sliders, Activity } from 'lucide-react';
 import { useApiUrl, useCustom, useList, useOne } from '@refinedev/core';
+import { ABPanel } from '../components/ABPanel';
 
 interface CampaignDetailProps {
   campaignId: string;
@@ -172,6 +173,11 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
             ))}
           </div>
         </div>
+      </div>
+
+      {/* A/B Test — weighted variants */}
+      <div style={{ marginBottom: 12 }}>
+        <ABPanel campaignId={campaignId} onNavigate={onNavigate} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>

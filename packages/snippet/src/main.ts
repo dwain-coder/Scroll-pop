@@ -88,6 +88,9 @@ interface CampaignConfig {
   targeting: TargetingRule[];
   frequency: FrequencyRule;
   affiliateSlots: AffiliateSlot[];
+  // A/B test variants. When present, the snippet allocates a visitor to one (weighted, sticky)
+  // and renders its design instead of `design`. Tags events with abVariantId.
+  variants?: { id: string; weight: number; design: DesignConfig; affiliateSlots: AffiliateSlot[] }[];
 }
 
 interface SiteConfig {
@@ -364,6 +367,10 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
     }
     fired = true;
     console.log('[ScrollPop] Trigger fired! Displaying campaign popup:', campaign.id);
+
+    // Allocate the A/B variant first so the impression (and every later event) is attributed
+    // to the chosen variant via abVariantId.
+    resolveVariant(campaign);
 
     // Beacon impression with trigger metadata
     beaconEvent(campaign, 'impression', undefined, {
@@ -669,8 +676,32 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
 
 // ─── Popup Rendering (Shadow DOM) ─────────────────────────────────────────────
 
+// A/B: weighted, sticky-per-visitor variant allocation. Records the chosen variant id for
+// event attribution (abVariantId). Falls back to the base design when there are no variants.
+const _variantByCampaign: Record<string, string> = {};
+function resolveVariant(campaign: CampaignConfig): { design: DesignConfig; affiliateSlots: AffiliateSlot[] } {
+  const vs = campaign.variants;
+  if (!vs || !vs.length) return { design: campaign.design, affiliateSlots: campaign.affiliateSlots };
+  const key = '_sp_ab_' + campaign.id;
+  let chosen = vs[0]!; // vs.length >= 1 guaranteed above
+  let saved: string | null = null;
+  try { saved = localStorage.getItem(key); } catch {}
+  const sticky = saved ? vs.find((v) => v.id === saved) : undefined;
+  if (sticky) {
+    chosen = sticky;
+  } else {
+    const total = vs.reduce((s, v) => s + v.weight, 0);
+    let r = Math.random() * total;
+    for (const v of vs) { r -= v.weight; if (r < 0) { chosen = v; break; } }
+    try { localStorage.setItem(key, chosen.id); } catch {}
+  }
+  _variantByCampaign[campaign.id] = chosen.id;
+  return { design: chosen.design, affiliateSlots: chosen.affiliateSlots };
+}
+
 function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
-  const { design, affiliateSlots, id: campaignId } = campaign;
+  const { id: campaignId } = campaign;
+  const { design, affiliateSlots } = resolveVariant(campaign);
   const _impressionTs = Date.now();
   const getDisplayDuration = () => Math.round(Date.now() - _impressionTs);
 
@@ -1086,6 +1117,7 @@ function beaconEvent(
       campaignId:     campaign.id,
       siteId:         activeSiteId,
       eventType,
+      abVariantId:    _variantByCampaign[campaign.id] ?? null,
       affiliateSlotId: affiliateSlotId ?? null,
       visitorId:      getVisitorId(),
       sessionId:      getSessionId(),
