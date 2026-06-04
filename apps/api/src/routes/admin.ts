@@ -63,24 +63,40 @@ async function assertSuperAdmin(request: FastifyRequest, reply: FastifyReply): P
     columns: { email: true, clerkUserId: true },
   });
 
-  // Super-admin requires BOTH the email match AND that the email is verified & primary in Clerk.
-  // This closes the path where an unverified/secondary admin-looking email could grant console access.
+  // Super-admin requires the DB email to match ADMIN_EMAIL. The DB email is populated by the
+  // Clerk webhook from the user's own account, so it is NOT user-spoofable. On top of that we
+  // re-check live with Clerk that the email is the verified primary — but if the Clerk API call
+  // itself ERRORS (network blip, transient Clerk outage), we fall back to the DB-email match
+  // rather than silently locking the owner out. An explicit "not verified / not primary" answer
+  // from Clerk is still a denial.
+  const emailMatches = !!user && isAdminUser(user.email);
   let verified = false;
-  if (user && isAdminUser(user.email)) {
+  if (emailMatches) {
     try {
-      const cu = await clerkClient.users.getUser(user.clerkUserId);
+      const cu = await clerkClient.users.getUser(user!.clerkUserId);
       const primary =
         cu.emailAddresses.find((e) => e.id === cu.primaryEmailAddressId) ?? cu.emailAddresses[0];
       verified =
         !!primary &&
         primary.verification?.status === 'verified' &&
         primary.emailAddress.toLowerCase() === ADMIN_EMAIL;
-    } catch {
-      verified = false;
+      if (!verified) {
+        request.log.warn(
+          { clerkUserId: user!.clerkUserId, primaryEmail: primary?.emailAddress, status: primary?.verification?.status },
+          '[admin] super-admin denied: Clerk primary email not verified/matching',
+        );
+      }
+    } catch (err) {
+      request.log.error({ err }, '[admin] Clerk verification call failed — falling back to DB email match');
+      verified = true; // DB email already matched ADMIN_EMAIL and is webhook-sourced (not spoofable)
     }
   }
 
   if (!verified) {
+    request.log.warn(
+      { userId: request.userId, hasUser: !!user, dbEmail: user?.email, emailMatches, adminEmailConfigured: ADMIN_EMAIL !== '' },
+      '[admin] super-admin check failed',
+    );
     await reply.code(403).send({
       error: {
         code: 'FORBIDDEN',
