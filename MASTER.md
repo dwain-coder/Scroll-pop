@@ -1211,106 +1211,67 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 - Settings/Profile actions that have no backend show honest "not available" messaging
   instead of fake success toasts
 
-### ❌ Not Built Yet (v2 targets)
-- Real-time view limit enforcement in Worker (currently uncapped)
-- Stripe billing: UI checkout wired to real Stripe API; needs `STRIPE_PRICE_*` env vars +
-  Shopify Partner webhook endpoint configured before going live
-- Stripe Usage Records metering (views are not reported to Stripe)
-- **Neon partition maintenance**: 2026 partitions created manually in production; need a
-  migration/cron to auto-create future monthly partitions before each month starts
-- `api.scrollpop.online` custom domain (API still at `scroll-pop.onrender.com`)
-- Clerk Organizations / team UI — personal accounts only; org-based path dormant
-- `scrollpop.online` marketing site
-- ✅ **Email notifications (Resend)** — DONE (Jun 4 2026). See the Jun 3–4 session log + §25 T1/T2.
-- ✅ **Campaign scheduling (start/end dates)** — DONE (Jun 3 2026). Optional run window
-  per campaign, evaluated in the **visitor's local time** (datetime-local strings, no
-  timezone). Stored in the design config (`design.config.schedule = { startsAt, endsAt }`)
-  — zero migration, flows through the existing config payload. Snippet gates rendering via
-  `withinSchedule()` (popup simply doesn't fire outside the window; empty bound = unbounded).
-  Designer UI: "Campaign Schedule" section (two datetime-local inputs) in the left sidebar.
-- ✅ **Geo targeting (country)** — DONE (Jun 2 2026). Edge Worker injects `CF-IPCountry`
-  per-request into the config payload (`config.geo.country`, KV cache stays geo-free);
-  snippet evaluates `geo` rules against it (fail-open if country unknown). Dashboard geo
-  dropdown now uses correct ISO alpha-2 codes (was `UK`/`AUS`/`EU` — invalid). Region/city
-  granularity remains out of scope (needs geo-IP DB).
-- ✅ **UTM parameter targeting** — DONE (Jun 2 2026). Snippet matches any of the 5 UTM
-  params (source/medium/campaign/term/content) against the current URL **or the visitor's
-  first-touch UTM** (raw query string persisted in `localStorage._sp_utm`). Dashboard UTM
-  filter = param dropdown + value. Rule value shape `{ param, value }` (tolerates legacy
-  `{ source }` on read).
-- 🗑️ **Gamified popup types (spin wheel + scratch card) removed (Jun 3 2026).** Both were
-  non-functional (spin didn't spin in the editor; scratch had no editor entry point at all —
-  no template, no popup-type option, no preview). Removed from the snippet (renderer + CSS +
-  handlers), the editor popup-type dropdown, and the template gallery (3 templates:
-  `spin-to-win`, `spin-to-win-raffle`, `scratch-reveal-curiosity`). **Snippet dropped from
-  10,184 → 8,388 gzipped (~1,800 B reclaimed, ~1,850 B headroom under the 10 KB gate).** If
-  gamified popups are wanted later, build them properly as a **lazy-loaded** module (fetched
-  only when a gamified campaign renders) so they never pressure the core budget.
-- ⏸ **A/B percentage gate temporarily stubbed in the snippet** — to fit the geo+UTM
-  additions under the 10 KB gzip gate (landed at 10,236/10,240), the `ab_test` targeting
-  case is a passthrough (`return true`) for now. Real variant allocation is built in the
-  A/B testing item (v2 #6), which supersedes the simple % gate anyway. The dashboard still
-  has the % slider but it won't gate until #6.
-- Webhook / outbound HTTP on conversion events
-- ✅ **Campaign duplication via UI** — DONE (Jun 4 2026). See the Jun 3–4 session log.
-- Bulk campaign operations
-- Team invitations UI (Clerk org invitations exist but no dashboard wrapper)
-- Shopify App Store submission (App Embed Block needed first)
-- Shopify App Embed Block (vs Script Tag)
-- Advanced URL-targeting rule builder + campaign scheduler (removed from wizard as step 3;
-  defaults to all pages / always-on; deferred to post-launch edit screen)
-- Actions step (post-submit redirect, confetti, Mailchimp/Klaviyo, follow-up email) —
-  removed from wizard; snippet always shows success view; revisit when integrations are built
-- API key management (rotate/create API keys — no backend route exists)
-- Analytics reset endpoint (events are immutable append-only)
-- Account-wide data export (GDPR)
-- Account/org deletion backend
-- GoFundMe / Donorbox platform-specific setup guides
-- Admin impersonation for support
-- ✅ **Playwright E2E test suite** — DONE (Jun 3 2026). `e2e/` workspace, 15 tests across
-  3 suites: dashboard (demo mode), marketing site, and snippet runtime (injects the built
-  bundle into a real-origin fixture, mocks the edge config/beacon, asserts the popup host
-  renders + targeting gating). Serialized (workers:1) to avoid Vite-dev cold-compile flake.
-  Runs in CI as a **non-gating** `e2e` job (not in any deploy `needs` list).
-- ✅ **Sentry error tracking** — wired Jun 4 2026 (dep-free; see §25 T1). Dormant until `SENTRY_DSN`/`VITE_SENTRY_DSN` set.
-- ✅ **PostHog analytics** — wired Jun 4 2026 (CDN; see §25 T2). Dormant until `VITE_POSTHOG_KEY` set.
-- Affiliate slot click tracking postback (client-side only)
-- Conversion event API (external postback from merchant site)
-- Teaser + success step WYSIWYG rendering (snippet uses built-in layout for those two steps)
+### ❌ Not Built Yet
+
+#### Billing & Limits
+- **Stripe billing** — needs `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs; checkout UI is wired but inactive
+- **Stripe Usage Records** — monthly view counts not reported to Stripe; overage billing doesn't work
+- **Real-time view cap enforcement** fully wired but requires `REDIS_URL`/`REDIS_TOKEN` set as Worker secrets — without them the edge check no-ops
+
+#### Infrastructure
+- **`api.scrollpop.online` custom domain** — API still at `scroll-pop.onrender.com`
+- **R2 snippet CDN fully live** — bucket + `p.js` uploaded (Jun 4); Worker serves from R2; `cdn.scrollpop.online` custom domain on bucket still needed; `SNIPPET_CDN_URL` on Render not yet updated
+- **Render Pre-Deploy Command** — set to `pnpm --filter @scrollpop/api exec drizzle-kit migrate` to auto-apply migrations on deploy
+
+#### Shopify
+- **Shopify App Embed Block** — replace Script Tag with proper App Embed (no theme code edits, better performance)
+- **Shopify App Store submission** — requires App Embed Block first
+
+#### Campaigns & Features
+- ⏸ **A/B percentage gate stubbed** — `ab_test` targeting is a passthrough (`return true`) in the snippet; real allocation is a v2 build (supersedes the simple % slider anyway)
+- **Affiliate slot click tracking postback** — client-side only; no server-side postback
+- **Conversion event API** — no external postback endpoint for merchant sites
+- **Teaser + success step WYSIWYG** — snippet uses built-in layout for those two steps; only the main step is fully WYSIWYG
+- **Affiliate-network links backend** — Settings UI exists (localStorage); needs backend persistence + auto-wire into affiliate slot URLs
+- **Actions step** — post-submit redirect, confetti, Mailchimp/Klaviyo, follow-up email; removed from wizard, revisit when integrations built
+- **Webhook outbound** — fire HTTP callbacks to operator URLs on conversion events
+
+#### Account & Admin
+- **Team invitations UI** — Clerk org invitations exist but no dashboard wrapper
+- **Bulk campaign operations**
+- **API key management** — no backend route to rotate/create keys
+- **Account/org deletion backend**
+- **Admin impersonation** — no support tool to act as a tenant
+
+#### Analytics & Compliance
+- **Account-wide data export (GDPR)**
+- **Analytics reset endpoint** — events are immutable append-only by design
+- **GoFundMe / Donorbox** platform-specific setup guides
+
+#### Marketing
+- **`scrollpop.online` marketing site** — separate Cloudflare Pages site; not yet built
 
 ---
 
 ## 23. v2 Roadmap
 
-Priority order for the next release cycle:
+Items remaining (completed ones moved to §22 done list above):
 
-1. **Real view cap enforcement** — Worker reads tenant plan limits from KV, suppresses config when over limit. Sync limit to KV on plan change.
-2. **Stripe Usage Records** — flush monthly view counts to Stripe Usage API so overages are billed correctly.
-3. **Campaign scheduling** — `starts_at` / `ends_at` on campaigns. Worker checks timestamps.
-4. **`api.scrollpop.online` custom domain** — Cloudflare proxied to Render. HTTPS everywhere.
-4a. **Neon partition auto-create** — ✅ done (`apps/api/src/db/ensure-partitions.ts` runs on
-    API boot). Kept here for history.
-4b. **Affiliate-network links (Amazon Associates / Rakuten)** — Settings → Affiliate Networks UI
-    added (saved links, currently localStorage). Pending: persist to the backend and auto-wire
-    into campaign affiliate slots (append affiliate tags to product/click-tracker URLs) so they
-    flow through to live ads. Org identity + these settings fields need a `tenants`-column
-    migration (website, support_email, locale prefs, affiliate links) — see §25 migration note.
-5. **Email notifications** — Resend/SendGrid integration. Alert at 80 % view cap, campaign go-live, billing failure.
-6. **Geo targeting** — add `geo_country` / `geo_region` to TargetingKind. Worker reads Cloudflare CF-IPCountry header.
-7. **UTM targeting** — match on `utm_source`, `utm_campaign`, `utm_medium` from URL params.
-8. **Shopify App Embed Block** — replace Script Tag with proper App Embed (no theme code, better performance).
-9. **Shopify App Store submission** — after App Embed Block is live.
-10. **Team invitations UI** — wrap Clerk organisation invitations in the Settings page.
-11. **Campaign duplication UI** — single button on Campaign Detail to clone a campaign.
-12. **Sentry + PostHog initialisation** — wire up `Sentry.init()` in both API and Dashboard. Call `posthog.init()` in Dashboard.
-13. **E2E test suite** — Playwright tests for: sign-in, create site, create campaign, publish, verify popup renders.
-14. **scrollpop.io marketing site** — separate Cloudflare Pages site.
+1. **Stripe** — activate billing: `STRIPE_SECRET_KEY` + webhook secret + 4 price IDs. Checkout UI already wired.
+2. **Stripe Usage Records** — flush monthly view counts to Stripe Usage API so overages are billed.
+3. **`api.scrollpop.online` custom domain** — Cloudflare proxied to Render. Cleaner URL, HTTPS everywhere.
+4. **Affiliate-network links backend** — persist Settings → Affiliate Networks to DB (`tenants` columns migration); auto-wire affiliate tags into slot URLs so they flow through to live ads.
+5. **Shopify App Embed Block** — replace Script Tag with proper App Embed (no theme code edits, better performance).
+6. **Shopify App Store submission** — after App Embed Block is live.
+7. **Team invitations UI** — wrap Clerk organisation invitations in the Settings page.
+8. **`scrollpop.online` marketing site** — separate Cloudflare Pages project.
+9. **A/B testing (real)** — proper variant allocation + Bayesian significance; supersedes the stubbed % gate in the snippet.
 
 ---
 
 ## 24. v3 Roadmap
 
-Longer-horizon features:
+Longer-horizon features (none started):
 
 - **ClickHouse migration** — at >50M events/month, migrate analytics writes from TimescaleDB to ClickHouse for OLAP performance.
 - **Real-time social-proof popups** — "X people bought this in the last hour" overlays. Requires a pub/sub mechanism.
@@ -1318,7 +1279,6 @@ Longer-horizon features:
 - **SAML SSO** — enterprise orgs. Clerk supports SAML — just needs exposing in the UI.
 - **Native iOS / Android SDKs** — in-app popup SDK for mobile apps.
 - **Full white-labelling** — custom domain + custom branding for agency plans.
-- **Advanced A/B testing** — Bayesian significance testing, multi-arm bandit allocation.
 - **Webhook outbound** — fire HTTP callbacks to operator URLs on conversion events.
 - **GDPR data export** — one-click download of all visitor event data for a site (required for Shopify App Store approval).
 - **Campaign templates library** — pre-built designs for common use cases (exit offer, newsletter signup, affiliate product launch).
