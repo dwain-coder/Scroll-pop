@@ -1,7 +1,12 @@
 import React from 'react';
-import { ArrowLeft, Eye, Globe, Megaphone, MousePointerClick, Percent, Radar, Sliders, Activity } from 'lucide-react';
-import { useApiUrl, useCustom, useList, useOne } from '@refinedev/core';
+import {
+  ArrowLeft, Eye, Globe, Megaphone, MousePointerClick, Percent, Radar, Sliders,
+  Activity, Play, Disc3, Ticket, Plus, Trash2, Copy, Check, RefreshCw, X,
+} from 'lucide-react';
+import { useApiUrl, useCustom, useCustomMutation, useList, useOne } from '@refinedev/core';
 import { ABPanel } from '../components/ABPanel';
+import InteractivePreview from '../components/campaign-designer/InteractivePreview';
+import type { Campaign } from '../components/campaign-designer/types';
 
 interface CampaignDetailProps {
   campaignId: string;
@@ -10,20 +15,341 @@ interface CampaignDetailProps {
 
 type RuleItem = { id: string; type?: string; params?: any; kind?: string; operator?: string; value?: any; frequency?: string };
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+// Map raw API triggers → the Campaign.triggers shape InteractivePreview expects
+function mapApiTriggers(apiTriggers: RuleItem[], freq: RuleItem | null): Campaign['triggers'] {
+  const t: Campaign['triggers'] = {
+    exitIntent: false,
+    scrollPercent: 0,
+    inactivitySeconds: 0,
+    timeDelaySeconds: 0,
+    pageTargeting: '*',
+    deviceTargeting: 'all',
+    geoTargeting: 'All Countries',
+    frequencyCapDays: 7,
+    newVisitorOnly: false,
+    sessionPageCount: 0,
+    utmParam: 'utm_source',
+    utmValue: '',
+    startsAt: '',
+    endsAt: '',
+    frequency: (freq?.frequency as any) ?? 'once_per_session',
+  };
+  for (const rule of apiTriggers) {
+    if (rule.type === 'scroll_pct')         t.scrollPercent        = rule.params?.pct ?? rule.params?.scroll_pct ?? 50;
+    if (rule.type === 'dwell_time')          t.timeDelaySeconds     = rule.params?.seconds ?? 5;
+    if (rule.type === 'exit_intent_mouse')   t.exitIntent           = true;
+    if (rule.type === 'inactivity')          t.inactivitySeconds    = rule.params?.seconds ?? 30;
+  }
+  return t;
+}
+
+// Build a minimal Campaign object from design config + API triggers so
+// InteractivePreview can render & simulate without the wizard's Campaign type.
+function buildPreviewCampaign(campaignId: string, name: string, design: any, triggers: Campaign['triggers']): Campaign {
+  const cfg = design?.config ?? {};
+  const mainStep = Array.isArray(cfg.steps) ? cfg.steps.find((s: any) => s.id === 'main') : cfg.steps?.main;
+  const teaserStep = Array.isArray(cfg.steps) ? cfg.steps.find((s: any) => s.id === 'teaser') : cfg.steps?.teaser;
+  const successStep = Array.isArray(cfg.steps) ? cfg.steps.find((s: any) => s.id === 'success') : cfg.steps?.success;
+
+  const fallbackMain = {
+    popupType: 'modal' as const,
+    position: 'center' as const,
+    width: 480,
+    height: 320,
+    backgroundColor: cfg.backgroundColor || '#ffffff',
+    borderRadius: cfg.borderRadius || 12,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
+    overlayColor: 'rgba(0,0,0,0.5)',
+    animationEntrance: cfg.animation || 'scale-up',
+    elements: [],
+    enabled: true,
+  };
+
+  const emptyStep = {
+    popupType: 'modal' as const,
+    position: 'center' as const,
+    width: 480, height: 200,
+    backgroundColor: '#ffffff',
+    borderRadius: 8, borderWidth: 0, borderColor: 'transparent',
+    boxShadow: '', overlayColor: '', animationEntrance: 'fade-in',
+    elements: [], enabled: false,
+  };
+
+  return {
+    id: campaignId,
+    name,
+    category: 'Campaign',
+    isActive: true,
+    steps: {
+      teaser:  teaserStep  ?? emptyStep,
+      main:    mainStep    ?? fallbackMain,
+      success: successStep ?? emptyStep,
+    },
+    triggers,
+    conversions: 0,
+    views: 0,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+// ── Spin Wheel inline SVG preview ─────────────────────────────────────────────
+function SpinWheelPreview({ slices, size = 220 }: { slices: { label: string; color?: string }[]; size?: number }) {
+  const COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#f97316'];
+  const n = slices.length || 6;
+  const arc = (Math.PI * 2) / n;
+  const r = size / 2 - 4;
+  const cx = size / 2, cy = size / 2;
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.18))' }}>
+      {slices.map((sl, i) => {
+        const start = i * arc - Math.PI / 2;
+        const end = start + arc;
+        const x1 = cx + r * Math.cos(start), y1 = cy + r * Math.sin(start);
+        const x2 = cx + r * Math.cos(end),   y2 = cy + r * Math.sin(end);
+        const lx = cx + r * 0.65 * Math.cos(start + arc / 2);
+        const ly = cy + r * 0.65 * Math.sin(start + arc / 2);
+        const col = sl.color || COLORS[i % COLORS.length];
+        return (
+          <g key={i}>
+            <path d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 0,1 ${x2},${y2} Z`} fill={col} stroke="#fff" strokeWidth="2" />
+            <text x={lx} y={ly} textAnchor="middle" dominantBaseline="central" fill="#fff"
+              fontSize={Math.min(13, Math.floor(r * 0.14))} fontWeight="700"
+              style={{ pointerEvents: 'none', userSelect: 'none' }}>
+              {sl.label.length > 10 ? sl.label.slice(0, 9) + '…' : sl.label}
+            </text>
+          </g>
+        );
+      })}
+      <circle cx={cx} cy={cy} r={r * 0.1} fill="#fff" />
+      {/* Pointer */}
+      <polygon points={`${cx},${cy - r - 2} ${cx - 9},${cy - r + 14} ${cx + 9},${cy - r + 14}`} fill="#f59e0b" />
+    </svg>
+  );
+}
+
+// ── Coupons panel ─────────────────────────────────────────────────────────────
+function CouponsPanel({ campaignId, apiUrl }: { campaignId: string; apiUrl: string }) {
+  const { data: couponsRes, refetch } = useCustom({
+    url: `${apiUrl}/coupons?campaignId=${campaignId}&limit=200`, method: 'get',
+  });
+  const { mutateAsync: customMutate } = useCustomMutation();
+  const [prefix, setPrefix] = React.useState('SAVE');
+  const [count, setCount] = React.useState(5);
+  const [discountPct, setDiscountPct] = React.useState<number | ''>('');
+  const [generating, setGenerating] = React.useState(false);
+  const [copied, setCopied] = React.useState<string | null>(null);
+  const [toast, setToast] = React.useState<string | null>(null);
+
+  const coupons: any[] = (couponsRes as any)?.data ?? [];
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2800); };
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const body: any = { campaignId, count, prefix };
+      if (discountPct !== '') body.discountPct = discountPct;
+      await customMutate({ url: `${apiUrl}/coupons/generate`, method: 'post', values: body });
+      await refetch();
+      showToast(`Generated ${count} coupon${count !== 1 ? 's' : ''}.`);
+    } catch { showToast('Failed to generate coupons.'); }
+    finally { setGenerating(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    await customMutate({ url: `${apiUrl}/coupons/${id}`, method: 'delete', values: {} }).catch(() => {});
+    await refetch();
+  };
+
+  const handleCopy = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopied(code);
+    setTimeout(() => setCopied(null), 1800);
+  };
+
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <Ticket size={13} style={{ color: 'var(--data-3)' }} />
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Coupon Codes</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>{coupons.length} code{coupons.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Generator */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14, padding: '12px 14px', background: 'var(--bg-raised)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Prefix</div>
+          <input className="input" style={{ width: 90, fontSize: 12 }} value={prefix} onChange={e => setPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12))} placeholder="SAVE" />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Count</div>
+          <input className="input" style={{ width: 70, fontSize: 12 }} type="number" min={1} max={500} value={count} onChange={e => setCount(Math.min(500, Math.max(1, +e.target.value)))} />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Discount %</div>
+          <input className="input" style={{ width: 80, fontSize: 12 }} type="number" min={1} max={100} placeholder="e.g. 20" value={discountPct} onChange={e => setDiscountPct(e.target.value === '' ? '' : Math.min(100, Math.max(1, +e.target.value)))} />
+        </div>
+        <button
+          className="btn btn-primary btn-sm"
+          style={{ gap: 5, whiteSpace: 'nowrap' }}
+          onClick={handleGenerate}
+          disabled={generating}
+        >
+          {generating ? <RefreshCw size={12} className="spin" /> : <Plus size={12} />}
+          Generate
+        </button>
+      </div>
+
+      {/* Coupon list */}
+      {coupons.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>No codes yet — generate some above.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {coupons.map((c: any) => (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--bg-raised)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+              <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)', flex: 1, letterSpacing: '0.06em' }}>{c.code}</code>
+              {c.discountPct && <span className="badge badge-neutral" style={{ fontSize: 9 }}>{c.discountPct}% off</span>}
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                {c.uses}{c.maxUses != null ? `/${c.maxUses}` : ''} uses
+              </span>
+              {c.expiresAt && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>exp {new Date(c.expiresAt).toLocaleDateString()}</span>}
+              <button className="btn btn-icon btn-sm" onClick={() => handleCopy(c.code)} title="Copy">
+                {copied === c.code ? <Check size={11} style={{ color: 'var(--status-success)' }} /> : <Copy size={11} />}
+              </button>
+              <button className="btn btn-icon btn-sm" onClick={() => handleDelete(c.id)} title="Delete">
+                <Trash2 size={11} style={{ color: 'var(--status-error)' }} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 10, padding: '12px 18px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', fontSize: 13, color: 'var(--text-primary)' }}>
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Spin Wheel config panel ───────────────────────────────────────────────────
+function SpinWheelPanel({ campaignId, design, apiUrl, onDesignSaved }: { campaignId: string; design: any; apiUrl: string; onDesignSaved: () => void }) {
+  const cfg = design?.config ?? {};
+  const COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#f97316'];
+  const initSlices = (cfg.slices ?? []).map((s: any, i: number) => ({ label: s.label || '', color: s.color || COLORS[i % COLORS.length] }));
+  while (initSlices.length < 6) initSlices.push({ label: '', color: COLORS[initSlices.length % COLORS.length] });
+
+  const [slices, setSlices] = React.useState<{ label: string; color: string }[]>(initSlices);
+  const [saving, setSaving] = React.useState(false);
+  const [toast, setToast] = React.useState<string | null>(null);
+  const { mutateAsync: customMutate } = useCustomMutation();
+
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2500); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const newConfig = {
+        ...cfg,
+        kind: 'spin_wheel',
+        slices: slices.filter(s => s.label.trim()),
+      };
+      await customMutate({
+        url: `${apiUrl}/campaigns/${campaignId}/design`,
+        method: 'put',
+        values: { kind: 'spin_wheel', config: newConfig, affiliate_slots: design?.affiliateSlots ?? [] },
+      });
+      showToast('Wheel saved!');
+      onDesignSaved();
+    } catch { showToast('Failed to save.'); }
+    finally { setSaving(false); }
+  };
+
+  const activeSlices = slices.filter(s => s.label.trim());
+
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+        <Disc3 size={13} style={{ color: 'var(--accent-500)' }} />
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Spin Wheel Configuration</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'start' }}>
+        {/* Slice editor */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Prize Slices — {activeSlices.length} active
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {slices.map((sl, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="color"
+                  value={sl.color}
+                  onChange={e => setSlices(prev => prev.map((s, j) => j === i ? { ...s, color: e.target.value ?? s.color } : s))}
+                  style={{ width: 28, height: 28, borderRadius: 4, border: '1px solid var(--border-subtle)', cursor: 'pointer', padding: 2 }}
+                  title="Slice colour"
+                />
+                <input
+                  className="input"
+                  style={{ flex: 1, fontSize: 12 }}
+                  placeholder={`Slice ${i + 1} (e.g. 20% OFF, Free Ship)`}
+                  value={sl.label}
+                  onChange={e => setSlices(prev => prev.map((s, j) => j === i ? { ...s, label: e.target.value } : s))}
+                />
+                {slices.length > 2 && (
+                  <button className="btn btn-icon btn-sm" onClick={() => setSlices(prev => prev.filter((_, j) => j !== i))}>
+                    <X size={11} style={{ color: 'var(--text-muted)' }} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            {slices.length < 8 && (
+              <button className="btn btn-secondary btn-sm" style={{ gap: 5 }}
+                onClick={() => setSlices(prev => [...prev, { label: '', color: COLORS[prev.length % COLORS.length]! }])}>
+                <Plus size={11} /> Add slice
+              </button>
+            )}
+            <button className="btn btn-primary btn-sm" style={{ gap: 5, marginLeft: 'auto' }} onClick={handleSave} disabled={saving || activeSlices.length < 2}>
+              {saving ? <RefreshCw size={11} className="spin" /> : <Check size={11} />}
+              Save wheel
+            </button>
+          </div>
+          {toast && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--status-success)' }}>{toast}</div>}
+        </div>
+
+        {/* Live preview */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <SpinWheelPreview slices={activeSlices.length >= 2 ? activeSlices : slices} size={200} />
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Live preview</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNavigate }) => {
   const { data: campaignData, isLoading: isCampaignLoading } = useOne({ resource: 'campaigns', id: campaignId });
   const { data: sitesData } = useList({ resource: 'sites' });
   const apiUrl = useApiUrl();
-  // Fetch per-campaign data through the Refine data provider so the Clerk JWT is
-  // attached uniformly. (A previous raw fetch read a localStorage token that was
-  // never set on the web app, leaving this page blank for active campaigns.)
+
   const { data: analyticsRes, isLoading: analyticsLoading } = useCustom({
     url: `${apiUrl}/analytics/campaigns/${campaignId}`, method: 'get',
   });
   const { data: triggersRes } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'get' });
   const { data: targetingRes } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'get' });
   const { data: frequencyRes } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'get' });
-  // journeys/ops are beta + flag-gated and may 404 — don't retry or toast on error.
+  const { data: designRes, refetch: refetchDesign } = useCustom({
+    url: `${apiUrl}/campaigns/${campaignId}/design`, method: 'get',
+  });
   const { data: diagnoseRes } = useCustom({
     url: `${apiUrl}/journeys/${campaignId}/diagnose`, method: 'get',
     queryOptions: { retry: false }, errorNotification: false,
@@ -33,16 +359,20 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
     queryOptions: { retry: false }, errorNotification: false,
   });
 
+  const [showSimulation, setShowSimulation] = React.useState(false);
+
   const analytics: any[] = (analyticsRes as any)?.data ?? [];
   const triggers: RuleItem[] = (triggersRes as any)?.data ?? [];
   const targeting: RuleItem[] = (targetingRes as any)?.data ?? [];
   const frequency: RuleItem | null = (frequencyRes as any)?.data ?? null;
+  const design: any = (designRes as any)?.data ?? null;
   const diagnose: any | null = (diagnoseRes as any)?.data ?? null;
   const liveEvents: any[] = (liveEventsRes as any)?.data ?? [];
-  const isLoading = analyticsLoading;
 
-  const campaign = campaignData?.data;
-  const site = sitesData?.data.find((s: any) => s.id === campaign?.siteId);
+  const campaign = campaignData?.data as any;
+  const site = sitesData?.data?.find((s: any) => s.id === campaign?.siteId);
+  const designKind: string = design?.kind ?? 'modal';
+  const isSpinWheel = designKind === 'spin_wheel';
 
   const stats = React.useMemo(() => {
     let impressions = 0, views = 0, clicks = 0;
@@ -54,7 +384,14 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
     return { impressions, views, clicks, ctr: impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) : '0.00' };
   }, [analytics]);
 
-  if (isCampaignLoading || isLoading) {
+  // Build preview campaign only when design + triggers are loaded
+  const previewCampaign = React.useMemo<Campaign | null>(() => {
+    if (!campaign || !design) return null;
+    const mappedTriggers = mapApiTriggers(triggers, frequency);
+    return buildPreviewCampaign(campaignId, campaign.name, design, mappedTriggers);
+  }, [campaign, design, triggers, frequency, campaignId]);
+
+  if (isCampaignLoading || analyticsLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, color: 'var(--text-muted)', fontSize: 13 }}>
         Loading campaign data…
@@ -66,16 +403,22 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
     return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Campaign not found.</div>;
   }
 
+  // Trigger label helpers
+  const triggerLabel = (t: RuleItem) => {
+    if (t.type === 'scroll_pct')       return `Scroll ${t.params?.pct ?? t.params?.scroll_pct ?? 50}%`;
+    if (t.type === 'dwell_time')       return `Dwell ${t.params?.seconds ?? 5}s`;
+    if (t.type === 'exit_intent_mouse') return 'Exit intent';
+    if (t.type === 'inactivity')       return `Inactivity ${t.params?.seconds ?? 30}s`;
+    if (t.type === 'click')            return 'Click';
+    return t.type ?? 'unknown';
+  };
+
   return (
     <div style={{ maxWidth: 1400, width: '100%' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={() => onNavigate('/campaigns')}
-            className="btn btn-icon"
-            title="Back to campaigns"
-          >
+          <button onClick={() => onNavigate('/campaigns')} className="btn btn-icon" title="Back to campaigns">
             <ArrowLeft size={14} />
           </button>
           <div>
@@ -87,13 +430,29 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
               {site?.domain ?? 'Unknown site'}
               <span style={{ marginLeft: 6 }}>·</span>
               <span style={{ textTransform: 'capitalize' }}>{campaign.status ?? 'draft'}</span>
+              {isSpinWheel && (
+                <><span style={{ marginLeft: 6 }}>·</span><span style={{ color: 'var(--accent-400)' }}>Spin to Win</span></>
+              )}
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => onNavigate(`/campaigns/${campaignId}/design`)}>
-            Edit Design
-          </button>
+          {/* Simulate button — only for standard (non-spin) campaigns with a design */}
+          {!isSpinWheel && previewCampaign && (
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ gap: 6 }}
+              onClick={() => setShowSimulation(true)}
+              title="Open interactive simulation with real trigger settings"
+            >
+              <Play size={12} /> Simulate
+            </button>
+          )}
+          {!isSpinWheel && (
+            <button className="btn btn-secondary btn-sm" onClick={() => onNavigate(`/campaigns/${campaignId}/design`)}>
+              Edit Design
+            </button>
+          )}
         </div>
       </div>
 
@@ -117,7 +476,15 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
         ))}
       </div>
 
-      {/* Main grid */}
+      {/* Spin wheel config + coupons (spin_wheel only) */}
+      {isSpinWheel && design && (
+        <SpinWheelPanel campaignId={campaignId} design={design} apiUrl={apiUrl} onDesignSaved={() => refetchDesign()} />
+      )}
+
+      {/* Coupons — visible for all campaign types */}
+      <CouponsPanel campaignId={campaignId} apiUrl={apiUrl} />
+
+      {/* Rules + Summary grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 12 }}>
         {/* Rules Engine */}
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
@@ -126,21 +493,26 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
             <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Rules Engine</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[
-              { label: 'Triggers', items: triggers, render: (t: RuleItem) => `${t.type ?? ''} ${t.params ? JSON.stringify(t.params) : ''}`.trim() },
-              { label: 'Targeting', items: targeting, render: (r: RuleItem) => `${r.operator ?? ''} ${r.kind ?? ''} ${r.value ? JSON.stringify(r.value) : ''}`.trim() },
-            ].map(({ label, items, render }) => (
-              <div key={label} style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '10px 12px' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>{label}</div>
-                {items.length === 0 ? (
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>None configured.</p>
-                ) : items.map((item) => (
-                  <p key={item.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', marginBottom: 2 }}>
-                    {render(item)}
-                  </p>
-                ))}
-              </div>
-            ))}
+            <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '10px 12px' }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Triggers</div>
+              {triggers.length === 0 ? (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>None configured.</p>
+              ) : triggers.map((t) => (
+                <p key={t.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', marginBottom: 2 }}>
+                  {triggerLabel(t)}
+                </p>
+              ))}
+            </div>
+            <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '10px 12px' }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Targeting</div>
+              {targeting.length === 0 ? (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>None configured.</p>
+              ) : targeting.map((r) => (
+                <p key={r.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', marginBottom: 2 }}>
+                  {`${r.operator ?? ''} ${r.kind ?? ''} ${r.value ? JSON.stringify(r.value) : ''}`.trim()}
+                </p>
+              ))}
+            </div>
             <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '10px 12px' }}>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Frequency</div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)' }}>
@@ -158,11 +530,12 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              { label: 'Trigger count', value: triggers.length },
+              { label: 'Type',            value: isSpinWheel ? 'Spin to Win' : (design?.kind ?? 'modal') },
+              { label: 'Trigger count',   value: triggers.length },
               { label: 'Targeting rules', value: targeting.length },
-              { label: 'Frequency cap', value: frequency?.frequency ?? 'once_per_session' },
-              { label: 'Status', value: campaign.status ?? 'draft' },
-              { label: 'Created', value: campaign.createdAt ? new Date(campaign.createdAt).toLocaleDateString() : '—' },
+              { label: 'Frequency cap',   value: frequency?.frequency ?? 'once_per_session' },
+              { label: 'Status',          value: campaign.status ?? 'draft' },
+              { label: 'Created',         value: campaign.createdAt ? new Date(campaign.createdAt).toLocaleDateString() : '—' },
             ].map(({ label, value }) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
@@ -175,7 +548,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
         </div>
       </div>
 
-      {/* A/B Test — weighted variants */}
+      {/* A/B Test panel */}
       <div style={{ marginBottom: 12 }}>
         <ABPanel campaignId={campaignId} onNavigate={onNavigate} />
       </div>
@@ -193,8 +566,8 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
                 { label: 'Rules evaluated', value: diagnose.rulesEvaluated },
-                { label: 'Fired', value: diagnose.fired },
-                { label: 'Blocked', value: diagnose.blocked },
+                { label: 'Fired',           value: diagnose.fired },
+                { label: 'Blocked',         value: diagnose.blocked },
               ].map(({ label, value }) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
@@ -246,6 +619,15 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
           )}
         </div>
       </div>
+
+      {/* Interactive simulation modal */}
+      {showSimulation && previewCampaign && (
+        <InteractivePreview
+          campaign={previewCampaign}
+          onClose={() => setShowSimulation(false)}
+          onRecordConversion={() => {}}
+        />
+      )}
     </div>
   );
 };

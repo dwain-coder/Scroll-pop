@@ -17,6 +17,7 @@ function PopupPreview({ kind, status }: { kind: string; status: string }) {
     banner:     { bg: '#fff7ed', accent: '#f59e0b' },
     fullscreen: { bg: '#fdf4ff', accent: '#a855f7' },
     floating:   { bg: '#eff6ff', accent: '#3b82f6' },
+    spin_wheel: { bg: '#fdf2ff', accent: '#8b5cf6' },
   };
   const { bg, accent } = palette[kind] ?? { bg: '#f4f4f5', accent: '#6366f1' };
 
@@ -48,6 +49,31 @@ function PopupPreview({ kind, status }: { kind: string; status: string }) {
       ) : kind === 'fullscreen' ? (
         <div style={{ position: 'absolute', inset: 6, background: accent, borderRadius: 4, opacity: 0.85, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ fontSize: 9, color: '#fff', fontWeight: 700, letterSpacing: '0.04em' }}>FULLSCREEN</span>
+        </div>
+      ) : kind === 'spin_wheel' ? (
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }}>
+          <svg width="70" height="70" viewBox="0 0 70 70">
+            {[0,1,2,3,4,5].map((i) => {
+              const colors = ['#8b5cf6','#a78bfa','#c4b5fd','#7c3aed','#6d28d9','#ddd6fe'];
+              const slice = (Math.PI * 2) / 6;
+              const start = i * slice - Math.PI / 2;
+              const end = start + slice;
+              const r = 32, cx = 35, cy = 35;
+              const x1 = cx + r * Math.cos(start), y1 = cy + r * Math.sin(start);
+              const x2 = cx + r * Math.cos(end),   y2 = cy + r * Math.sin(end);
+              return (
+                <g key={i}>
+                  <path d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 0,1 ${x2},${y2} Z`} fill={colors[i]} stroke="#fff" strokeWidth="1.5" />
+                  <text x={cx + (r * 0.62) * Math.cos(start + slice / 2)} y={cy + (r * 0.62) * Math.sin(start + slice / 2)} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="6" fontWeight="bold">
+                    {['10%','Free','20%','5%','Ship','15%'][i]}
+                  </text>
+                </g>
+              );
+            })}
+            <circle cx="35" cy="35" r="5" fill="#fff" />
+            <polygon points="35,1 32,9 38,9" fill="#f59e0b" />
+          </svg>
+          <div style={{ textAlign: 'center', fontSize: 8, fontWeight: 700, color: accent, marginTop: 2, letterSpacing: '0.04em' }}>SPIN TO WIN</div>
         </div>
       ) : (
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 88, height: 62, background: '#fff', borderRadius: 7, boxShadow: '0 4px 20px rgba(0,0,0,0.14)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

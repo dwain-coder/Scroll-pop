@@ -279,20 +279,54 @@ export default function InteractivePreview({
     }
   };
 
-  // Time delay simulation trigger
+  // Time delay / dwell-time simulation trigger
   useEffect(() => {
+    const hasTrigger = campaign.triggers.scrollPercent > 0 || campaign.triggers.exitIntent || (campaign.triggers.inactivitySeconds ?? 0) > 0;
     if (campaign.triggers.timeDelaySeconds > 0) {
       const timer = setTimeout(() => {
         if (!showMainCampaign && campaignStep === 'main') {
-          triggerMainPopup('Time delay of ' + campaign.triggers.timeDelaySeconds + 's met!');
+          triggerMainPopup('Dwell time of ' + campaign.triggers.timeDelaySeconds + 's met!');
         }
       }, campaign.triggers.timeDelaySeconds * 1000);
       return () => clearTimeout(timer);
-    } else {
-      // Instant triggering
+    } else if (!hasTrigger) {
+      // No other trigger configured — fire immediately
       triggerMainPopup('Instant trigger');
     }
   }, []);
+
+  // Exit-intent simulation: fire when mouse leaves the top of the simulation frame
+  useEffect(() => {
+    if (!campaign.triggers.exitIntent) return;
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (e.clientY <= 4 && !showMainCampaign && campaignStep === 'main') {
+        triggerMainPopup('Exit intent — mouse left viewport top!');
+      }
+    };
+    document.addEventListener('mouseleave', handleMouseLeave);
+    return () => document.removeEventListener('mouseleave', handleMouseLeave);
+  }, [campaign.triggers.exitIntent, showMainCampaign, campaignStep]);
+
+  // Inactivity simulation: fire after N seconds of no mouse/keyboard activity
+  useEffect(() => {
+    const seconds = campaign.triggers.inactivitySeconds ?? 0;
+    if (seconds <= 0) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(timer);
+      if (!showMainCampaign && campaignStep === 'main') {
+        timer = setTimeout(() => triggerMainPopup(`Inactivity — ${seconds}s with no interaction`), seconds * 1000);
+      }
+    };
+    reset();
+    document.addEventListener('mousemove', reset);
+    document.addEventListener('keydown', reset);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousemove', reset);
+      document.removeEventListener('keydown', reset);
+    };
+  }, [campaign.triggers.inactivitySeconds, showMainCampaign, campaignStep]);
 
   const triggerMainPopup = (reason?: string) => {
     setShowMainCampaign(true);
@@ -445,6 +479,12 @@ export default function InteractivePreview({
             <div className="p-3 bg-[#09090b]/50 rounded border border-zinc-800 space-y-1">
               <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-wider block">Campaign Triggers</span>
               <div className="flex flex-col gap-1 text-[11px] font-mono text-zinc-400">
+                {(campaign.triggers.inactivitySeconds ?? 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span>Inactivity:</span>
+                    <span className="text-white font-bold">{campaign.triggers.inactivitySeconds}s</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Exit Intent:</span>
                   <span className={campaign.triggers.exitIntent ? 'text-white font-bold' : 'text-zinc-600'}>
