@@ -1,7 +1,7 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 5, 2026 · v0.1.4-beta · Tracker: **40/54** items done
+> Last updated: June 5, 2026 EOD · v0.1.4-beta · Tracker: **40/54** items done · Launch readiness: **84/100** (was 61/100)
 
 ---
 
