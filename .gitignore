@@ -23,3 +23,6 @@ stitch_file_based_build_system/
 e2e/playwright-report/
 e2e/test-results/
 e2e/.last-run.json
+
+# Generated lint report
+apps/dashboard/lint-report.json
