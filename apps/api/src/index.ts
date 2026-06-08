@@ -722,10 +722,18 @@ async function bootstrap() {
             // Conversion-milestone notifications.
             if (eventType === 'conversion') {
               void checkConversionMilestone(campaign.tenantId);
+            }
 
-              // Lead capture: a conversion may carry the visitor's submitted email in its
-              // metadata. Persist it as a lead, deduped per (tenant, campaign, email).
-              // Best-effort — never break ingest. CTO-AUDIT P0-3.
+            // Lead capture: a `conversion` OR an `email_capture` may carry the visitor's submitted
+            // email. Persist it as a lead, deduped per (tenant, campaign, email) via
+            // onConflictDoNothing (so saving on both event types for one submit is a no-op).
+            // CRITICAL: `email_capture` is NOT subject to the origin gate above, so leads are saved
+            // even when the popup is served on a Shopify custom domain (e.g. sakananet.com vs the
+            // registered *.myshopify.com) or any host whose serving domain isn't in the site's
+            // known-domain list. Previously leads only saved on `conversion`, which the origin gate
+            // dropped on those domains — so lead capture silently failed. Best-effort — never break
+            // ingest. CTO-AUDIT P0-3.
+            if (eventType === 'conversion' || eventType === 'email_capture') {
               const md = (metadata ?? meta ?? {}) as Record<string, unknown>;
               const leadEmail = extractLeadEmail(md);
               if (leadEmail) {

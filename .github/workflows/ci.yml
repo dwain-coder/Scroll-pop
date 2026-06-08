@@ -250,6 +250,10 @@ jobs:
           npx wrangler r2 object put scrollpop-assets/p.js \
             --file packages/snippet/dist/p.js \
             --content-type application/javascript
+          # Lazy chunks have no embedded fallback in the Worker — they MUST be on R2 or they 404.
+          npx wrangler r2 object put scrollpop-assets/spin.js \
+            --file packages/snippet/dist/spin.js \
+            --content-type application/javascript
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

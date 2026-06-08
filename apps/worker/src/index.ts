@@ -42,8 +42,11 @@ export default Sentry.withSentry(
       return new Response(null, { headers: CORS_HEADERS });
     }
 
-    // GET /v1/:publicKey/p.js — serve the snippet (R2 preferred, bundled fallback)
-    if (request.method === 'GET' && url.pathname.endsWith('/p.js')) {
+    // GET …/p.js (core snippet) or …/spin.js (lazy spin-wheel chunk) — served from R2.
+    // p.js falls back to the bundled copy if the R2 object is missing; lazy chunks (spin.js)
+    // have no embedded fallback, so they MUST be uploaded to R2 by CI (see deploy-worker).
+    if (request.method === 'GET' && (url.pathname.endsWith('/p.js') || url.pathname.endsWith('/spin.js'))) {
+      const file = url.pathname.endsWith('/spin.js') ? 'spin.js' : 'p.js';
       const snippetHeaders = {
         'Content-Type': 'application/javascript',
         'X-Content-Type-Options': 'nosniff',
@@ -51,12 +54,14 @@ export default Sentry.withSentry(
         'Cache-Control': 'public, max-age=300',
       };
       if (env.SNIPPET_BUCKET) {
-        const obj = await env.SNIPPET_BUCKET.get('p.js');
+        const obj = await env.SNIPPET_BUCKET.get(file);
         if (obj) {
           return new Response(obj.body, { headers: snippetHeaders });
         }
       }
-      return new Response(snippetCode, { headers: snippetHeaders });
+      if (file === 'p.js') return new Response(snippetCode, { headers: snippetHeaders });
+      // spin.js missing from R2 — surface a clear 404 instead of a silent empty body.
+      return new Response('/* spin chunk not deployed */', { status: 404, headers: snippetHeaders });
     }
 
     // GET /c/:publicKey — config endpoint
