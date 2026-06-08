@@ -200,7 +200,12 @@ const WordPressConnectPanel: React.FC<{
     }
   };
 
-  const pluginDownloadUrl = 'https://pub-0a090ba944ba46269b65a6cfbb0ed1f0.r2.dev/scrollpop-wp.zip';
+  // The R2 public URL has no Cache-Control header, so browsers/edge can serve a stale
+  // copy after the zip is re-uploaded. Pin a version query param and bump it whenever the
+  // plugin zip changes — this guarantees a fresh download (the cache key includes the query).
+  // Keep in sync with packages/wp-plugin/scrollpop/scrollpop.php "Version:".
+  const PLUGIN_VERSION = '1.0.0';
+  const pluginDownloadUrl = `https://pub-0a090ba944ba46269b65a6cfbb0ed1f0.r2.dev/scrollpop-wp.zip?v=${PLUGIN_VERSION}`;
 
   return (
     <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
