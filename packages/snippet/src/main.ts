@@ -1044,9 +1044,12 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 
   // Switch to success congratulations screen state
   const transitionToSuccess = (email: string) => {
-    // email_capture = lead collected; conversion = outcome (covers popup_submit)
+    // email_capture = lead collected; conversion = outcome (covers popup_submit).
+    // The email MUST be in the email_capture metadata — the API's ESP sync, auto-responder,
+    // and Zapier/outbound webhook all read the address from this event (extractLeadEmail).
+    // Previously this sent only { hasEmail: true }, so those integrations silently no-op'd.
     if (email && email !== 'anonymous@scrollpop.online') {
-      beaconEvent(campaign, 'email_capture', slot?.id, { hasEmail: true });
+      beaconEvent(campaign, 'email_capture', slot?.id, { email, hasEmail: true });
     }
     beaconEvent(campaign, 'conversion', slot?.id, { email });
 
