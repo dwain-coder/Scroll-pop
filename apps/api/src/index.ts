@@ -942,7 +942,7 @@ async function bootstrap() {
   // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
   // a Redis flag after first successful run so warm restarts in the same deployment skip
   // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
-  const SCHEMA_VERSION = '13';
+  const SCHEMA_VERSION = '14'; // v14: sites.custom_domain (ensureIntegrationsSchema)
   const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)
