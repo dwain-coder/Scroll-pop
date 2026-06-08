@@ -696,9 +696,20 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
           const successHeadingEl = successStep.elements.find(e => e.type === 'heading');
           const successTextEl = successStep.elements.find(e => e.type === 'text');
 
+          // Derive the snippet's flat overlay fields from the designer's overlayColor (see
+          // CampaignDesign.mapCampaignToDesign — keep in sync) so modals get their backdrop.
+          const overlayAlpha = (() => {
+            const raw = mainStep.overlayColor || '';
+            const m = /rgba?\([^)]*?,\s*([0-9.]+)\s*\)/.exec(raw);
+            if (m && m[1] != null) return Math.min(1, Math.max(0, parseFloat(m[1])));
+            return raw && raw !== 'transparent' ? 0.5 : 0;
+          })();
+
           designKind = mainStep.popupType || 'modal';
           designConfig = {
             steps: campaign.steps,
+            overlayEnabled: overlayAlpha > 0,
+            overlayOpacity: overlayAlpha,
             // Authoritative editor snapshot for restoring advanced trigger/targeting state
             // (page-rule builder, Smart Product Match, schedule) — parity with the visual
             // designer's mapCampaignToDesign. Without this, reopening a wizard-saved campaign

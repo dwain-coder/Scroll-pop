@@ -323,6 +323,55 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  // POST /api/v1/sites/:id/verify-snippet
+  // Generic snippet-presence check for MANUAL installs (Shopify theme header, raw HTML, etc.)
+  // where there's no OAuth app. Fetches the site's homepage and confirms the served HTML
+  // references this site's public key (the embed loads cdn.scrollpop.online/v1/<key>/p.js).
+  // Mirrors verify-wordpress; auto-passes in dev/staging.
+  fastify.post<{ Params: { id: string } }>('/sites/:id/verify-snippet', async (request, reply) => {
+    const site = await db.query.sites.findFirst({
+      where: and(eq(sites.id, request.params.id), eq(sites.tenantId, request.tenantId), isNull(sites.deletedAt)),
+    });
+    if (!site) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Site not found' } });
+
+    if (process.env['NODE_ENV'] !== 'production') {
+      const [devUpdated] = await db.update(sites)
+        .set({ verifiedAt: new Date(), updatedAt: new Date() })
+        .where(eq(sites.id, site.id)).returning();
+      return reply.send({ data: { verified: true, verifiedAt: devUpdated?.verifiedAt, message: '✅ Verification bypassed in dev/staging mode.' } });
+    }
+
+    const shopHost = site.shopifyShop
+      ? (site.shopifyShop.includes('.') ? site.shopifyShop : `${site.shopifyShop}.myshopify.com`)
+      : null;
+    const base = `https://${shopHost ?? site.domain}`.replace(/\/$/, '');
+
+    let html = '';
+    try {
+      const res = await fetch(base, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'ScrollPop-Verify/1.0' } });
+      if (!res.ok) {
+        return reply.code(422).send({ error: { code: 'UNREACHABLE', message: `Site returned HTTP ${res.status} at ${base}.`, url: base } });
+      }
+      html = await res.text();
+    } catch (err: any) {
+      return reply.code(422).send({ error: { code: 'UNREACHABLE', message: `Could not reach ${base}. Is the site live and publicly accessible?`, detail: err?.message, url: base } });
+    }
+
+    if (!site.publicKey || !html.includes(site.publicKey)) {
+      return reply.code(422).send({
+        error: {
+          code: 'SNIPPET_NOT_FOUND',
+          message: 'ScrollPop snippet not found in the page HTML. Confirm the embed (with this site\'s public key) is pasted in your theme and loads on the storefront, then retry. Note: snippets injected via a tag manager may not be detectable here.',
+        },
+      });
+    }
+
+    const [updated] = await db.update(sites)
+      .set({ verifiedAt: new Date(), updatedAt: new Date() })
+      .where(eq(sites.id, site.id)).returning();
+    return reply.send({ data: { verified: true, verifiedAt: updated?.verifiedAt, message: 'Snippet detected — site verified!' } });
+  });
+
   // PATCH /api/v1/sites/:id/wordpress-url — store the WP site URL override
   fastify.patch<{ Params: { id: string } }>('/sites/:id/wordpress-url', async (request, reply) => {
     const body = z.object({ wpSiteUrl: z.string().url() }).parse(request.body);

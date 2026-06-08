@@ -369,6 +369,16 @@ function mapCampaignToDesign(campaign: Campaign) {
   const successHeadingEl = successStep.elements.find(e => e.type === 'heading');
   const successTextEl = successStep.elements.find(e => e.type === 'text');
 
+  // Parse the alpha out of the main step's overlayColor (e.g. "rgba(0,0,0,0.5)" → 0.5).
+  // 0 (or a transparent/absent value) means "no backdrop".
+  const overlayAlpha = (() => {
+    const raw = mainStep.overlayColor || '';
+    const m = /rgba?\([^)]*?,\s*([0-9.]+)\s*\)/.exec(raw);
+    if (m && m[1] != null) return Math.min(1, Math.max(0, parseFloat(m[1])));
+    // A solid color string with no alpha component → treat as fully opaque-ish backdrop.
+    return raw && raw !== 'transparent' ? 0.5 : 0;
+  })();
+
   const config = {
     steps: campaign.steps,
     // Full sidebar trigger/targeting snapshot — authoritative source for restoring the
@@ -388,6 +398,11 @@ function mapCampaignToDesign(campaign: Campaign) {
     boxShadow: mainStep.boxShadow,
     position: mainStep.position,
     animation: mainStep.animationEntrance,
+    // Backdrop: the designer stores it as steps.main.overlayColor (an rgba string), but the
+    // snippet renders the backdrop from the flat overlayEnabled + overlayOpacity fields. Derive
+    // those here so designer-built modals actually get their dark overlay (was silently absent).
+    overlayEnabled: overlayAlpha > 0,
+    overlayOpacity: overlayAlpha,
     elements: mainStep.elements, // Flat array of main elements for browser snippet parsing
     headline: headingEl ? headingEl.content : 'Special Limited Offer',
     subheadline: textEl ? textEl.content : '',

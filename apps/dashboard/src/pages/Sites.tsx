@@ -38,13 +38,36 @@ const platformLabel = (p: string) => {
 const ShopifyConnectPanel: React.FC<{
   site: SiteRecord;
   onDisconnect: () => void;
-}> = ({ site, onDisconnect }) => {
+  onVerified?: () => void;
+}> = ({ site, onDisconnect, onVerified }) => {
   const [shopInput, setShopInput] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const { mutateAsync: customMutate } = useCustomMutation<{ oauthUrl: string; shop: string }>();
+  const { mutateAsync: verifyMutate } = useCustomMutation<{ verified: boolean; message?: string }>();
+  const [verifying, setVerifying] = React.useState(false);
+  const [verifyMsg, setVerifyMsg] = React.useState('');
+  const [verifyOk, setVerifyOk] = React.useState(false);
 
   const isConnected = !!site.shopifyShop;
+
+  // Manual-install verification: probe the live storefront for the snippet (no OAuth needed).
+  const handleVerifySnippet = async () => {
+    setVerifying(true);
+    setVerifyMsg('');
+    setVerifyOk(false);
+    try {
+      const r = await verifyMutate({ url: `${getApiBase()}/sites/${site.id}/verify-snippet`, method: 'post', values: {} });
+      setVerifyOk(true);
+      setVerifyMsg(r.data?.message ?? 'Snippet detected — site verified!');
+      onVerified?.();
+    } catch (err) {
+      setVerifyOk(false);
+      setVerifyMsg(err instanceof Error ? err.message : 'Could not detect the snippet on your storefront yet.');
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,6 +167,33 @@ const ShopifyConnectPanel: React.FC<{
       <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '8px 0 0' }}>
         You'll be redirected to Shopify to grant permissions, then returned here.
       </p>
+
+      {/* Manual install path — verify without the OAuth app */}
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Already pasted the snippet in your theme?
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleVerifySnippet}
+            disabled={verifying}
+            style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+          >
+            {verifying ? <RefreshCw size={11} className="spin" /> : (site.verifiedAt ? <Wifi size={11} /> : <WifiOff size={11} />)}
+            {site.verifiedAt ? 'Re-test connection' : 'Test connection'}
+          </button>
+        </div>
+        {verifyMsg && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12, color: verifyOk ? 'var(--status-success, #16a34a)' : 'var(--status-error)' }}>
+            {verifyOk ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />} {verifyMsg}
+          </div>
+        )}
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '8px 0 0' }}>
+          We'll load your storefront and check the ScrollPop snippet is present — no app install required.
+        </p>
+      </div>
     </div>
   );
 };
@@ -761,6 +811,10 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                 onDisconnect={() => {
                   handleShopifyDisconnect(selectedSite);
                   setSelectedSite(null);
+                }}
+                onVerified={() => {
+                  refetch();
+                  setSelectedSite({ ...selectedSite, verifiedAt: new Date().toISOString() });
                 }}
               />
             )}
