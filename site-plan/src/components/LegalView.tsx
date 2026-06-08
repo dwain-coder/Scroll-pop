@@ -193,6 +193,7 @@ function SecurityPage() {
         <ul className="list-disc pl-5 space-y-1.5">
           <li><strong className="font-medium text-neutral-800">GDPR</strong> — Data Processing Agreement available on request. Personal data is hosted in the Asia-Pacific (Singapore) region; international transfers are covered by Standard Contractual Clauses.</li>
           <li><strong className="font-medium text-neutral-800">CCPA</strong> — We do not sell consumer personal information. Data Subject Request form available in dashboard.</li>
+          <li><strong className="font-medium text-neutral-800">Global Privacy Control (GPC)</strong> — The snippet honors the browser-level GPC opt-out signal recognized under CCPA/CPRA: when a visitor's browser sends GPC, popups still render but no analytics events are recorded and no visitor ID is stored.</li>
           <li><strong className="font-medium text-neutral-800">PCI DSS</strong> — Payment data handled exclusively by Stripe (Level 1 PCI-DSS). We are out of scope for card data.</li>
         </ul>
       </Section>

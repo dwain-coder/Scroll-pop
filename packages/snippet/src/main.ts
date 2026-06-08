@@ -137,7 +137,13 @@ let _requireConsent = false; // strict per-tenant opt-in (set from config)
 // ─── Exclusion Guards ─────────────────────────────────────────────────────────
 // Evaluates if we should skip analytics tracking (but still show popups)
 function evaluateSkipTracking(): void {
-  if (navigator.doNotTrack === '1' || (window as any).doNotTrack === '1' || localStorage.getItem('__sp_admin') === '1') {
+  // Honor Global Privacy Control (legally recognized under CCPA/CPRA) and the
+  // internal admin flag. We intentionally do NOT honor the legacy Do Not Track
+  // signal: it's deprecated (W3C disbanded the working group, browsers dropped the
+  // UI) and non-binding, and respecting it silently dropped a large share of real
+  // leads/analytics. GDPR/ePrivacy is handled separately by the explicit consent
+  // gate below (window.__sp_consent / Consent Mode + per-tenant requireConsent).
+  if ((navigator as any).globalPrivacyControl === true || localStorage.getItem('__sp_admin') === '1') {
     _skipTracking = true;
   }
   if (/localhost|127\.0\.0\.1|0\.0\.0\.0|\.local$|\.test$|scrollpop/.test(window.location.hostname)) {
