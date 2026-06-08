@@ -208,6 +208,10 @@ export const sites = pgTable(
     platform: platformEnum('platform').notNull().default('html'),
     shopifyShop: text('shopify_shop'),
     wpSiteUrl: text('wp_site_url'),
+    // Optional storefront/custom domain the snippet is actually served on (e.g. a Shopify
+    // store on its own domain rather than *.myshopify.com). Accepted by the event origin gate
+    // so impression/conversion analytics aren't dropped on custom domains.
+    customDomain: text('custom_domain'),
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

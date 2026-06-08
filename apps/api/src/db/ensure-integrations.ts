@@ -12,10 +12,11 @@ export async function ensureIntegrationsSchema(
 ): Promise<void> {
   try {
     await sqlClient.unsafe(`
-      ALTER TABLE tenants   ADD COLUMN IF NOT EXISTS integrations JSONB NOT NULL DEFAULT '{}';
-      ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS esp_config   JSONB NOT NULL DEFAULT '{}';
+      ALTER TABLE tenants   ADD COLUMN IF NOT EXISTS integrations  JSONB NOT NULL DEFAULT '{}';
+      ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS esp_config    JSONB NOT NULL DEFAULT '{}';
+      ALTER TABLE sites     ADD COLUMN IF NOT EXISTS custom_domain TEXT;
     `);
-    log.info('[schema] integrations + esp_config columns ensured (migration 0013)');
+    log.info('[schema] integrations + esp_config + custom_domain columns ensured');
   } catch (err) {
     log.error(err, '[schema] failed to ensure integrations schema (continuing startup)');
   }

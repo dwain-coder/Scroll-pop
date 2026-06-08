@@ -14,6 +14,8 @@ const UpdateSiteBody = z.object({
   name: z.string().min(1).max(100).optional(),
   platform: z.enum(['wordpress', 'shopify', 'html', 'donorbox', 'gofundme', 'other']).optional(),
   wpSiteUrl: z.string().url().optional(),
+  // Storefront/custom domain the snippet is served on (bare host or URL). Empty string clears it.
+  customDomain: z.string().max(253).optional(),
 });
 
 export const siteRoutes: FastifyPluginAsync = async (fastify) => {
@@ -131,6 +133,9 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.platform !== undefined ? { platform: body.platform } : {}),
         ...(body.wpSiteUrl !== undefined ? { wpSiteUrl: body.wpSiteUrl } : {}),
+        ...(body.customDomain !== undefined
+          ? { customDomain: body.customDomain.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null }
+          : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(sites.id, request.params.id), eq(sites.tenantId, request.tenantId)))

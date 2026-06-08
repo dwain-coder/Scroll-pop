@@ -247,13 +247,14 @@ jobs:
             echo "⏭️  CLOUDFLARE_API_TOKEN not set — skipping R2 upload."
             exit 0
           fi
-          npx wrangler r2 object put scrollpop-assets/p.js \
-            --file packages/snippet/dist/p.js \
-            --content-type application/javascript
-          # Lazy chunks have no embedded fallback in the Worker — they MUST be on R2 or they 404.
-          npx wrangler r2 object put scrollpop-assets/spin.js \
-            --file packages/snippet/dist/spin.js \
-            --content-type application/javascript
+          # Upload EVERY built chunk (p.js core + every lazy chunk like spin.js). Looping over
+          # dist/*.js means a newly-added chunk can never ship without its R2 object — that gap
+          # is exactly what made spin.js 404 and the wheel never render.
+          for f in packages/snippet/dist/*.js; do
+            echo "Uploading $(basename "$f") to R2…"
+            npx wrangler r2 object put "scrollpop-assets/$(basename "$f")" \
+              --file "$f" --content-type application/javascript
+          done
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

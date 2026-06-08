@@ -447,6 +447,7 @@ async function bootstrap() {
   type CampaignMeta = {
     tenantId: string; siteId: string; platform: string;
     domain: string | null; shopifyShop: string | null; wpSiteUrl: string | null;
+    customDomain: string | null;
   };
   const campaignMetaCache = new Map<string, CampaignMeta & { exp: number }>();
   async function resolveCampaignMeta(campaignId: string): Promise<CampaignMeta | null> {
@@ -473,6 +474,7 @@ async function bootstrap() {
             domain: (h['domain'] as string) || null,
             shopifyShop: (h['shopifyShop'] as string) || null,
             wpSiteUrl: (h['wpSiteUrl'] as string) || null,
+            customDomain: (h['customDomain'] as string) || null,
           };
           campaignMetaCache.set(campaignId, { ...meta, exp: now + 300_000 });
           return meta;
@@ -484,7 +486,7 @@ async function bootstrap() {
     if (!campaign) return null;
     const site = await db.query.sites.findFirst({
       where: eq(sites.id, campaign.siteId),
-      columns: { platform: true, domain: true, shopifyShop: true, wpSiteUrl: true },
+      columns: { platform: true, domain: true, shopifyShop: true, wpSiteUrl: true, customDomain: true },
     });
     const meta: CampaignMeta = {
       tenantId: campaign.tenantId,
@@ -493,6 +495,7 @@ async function bootstrap() {
       domain: site?.domain ?? null,
       shopifyShop: site?.shopifyShop ?? null,
       wpSiteUrl: site?.wpSiteUrl ?? null,
+      customDomain: site?.customDomain ?? null,
     };
 
     // Write to Redis L2 + in-process L1
@@ -506,6 +509,7 @@ async function bootstrap() {
           domain: meta.domain ?? '',
           shopifyShop: meta.shopifyShop ?? '',
           wpSiteUrl: meta.wpSiteUrl ?? '',
+          customDomain: meta.customDomain ?? '',
         });
         await redis.expire(`sp_campaign_meta:${campaignId}`, 300);
       } catch { /* non-fatal */ }
@@ -580,8 +584,20 @@ async function bootstrap() {
       } catch { /* unparseable — ignore this candidate */ }
     }
 
+    // Operator-registered custom/storefront domain (e.g. a Shopify store served on its own
+    // domain instead of *.myshopify.com). Lets impression/conversion analytics through on
+    // custom domains without weakening the gate for everyone.
+    if (meta.customDomain) {
+      try {
+        const cdHost = meta.customDomain.includes('://')
+          ? new URL(meta.customDomain).hostname
+          : meta.customDomain;
+        if (registrableDomain(cdHost) === target) return true;
+      } catch { /* unparseable — ignore this candidate */ }
+    }
+
     // No known domain of any kind — fail open so legitimate traffic is never dropped.
-    if (!meta.domain && !meta.shopifyShop && !meta.wpSiteUrl) return true;
+    if (!meta.domain && !meta.shopifyShop && !meta.wpSiteUrl && !meta.customDomain) return true;
 
     return false;
   }
