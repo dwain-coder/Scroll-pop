@@ -786,8 +786,12 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   let slot = pickWeightedSlot(affiliateSlots);
   if (slot) slot = { ...slot };
 
-  // Detect Smart Product
-  const smartProduct = (campaign.triggers as any)?.enableSmartAffiliate ? detectSmartProduct() : null;
+  // Detect Smart Product. The flag lives in the design config (config.uiTriggers, written by
+  // both editors), NOT on campaign.triggers — that's the normalized trigger ARRAY from the
+  // edge, so the old `campaign.triggers.enableSmartAffiliate` was always undefined and Smart
+  // Product Match never ran live. Read it from the design config instead.
+  const smartAffiliate = !!((design as any)?.uiTriggers?.enableSmartAffiliate ?? (design as any)?.enableSmartAffiliate);
+  const smartProduct = smartAffiliate ? detectSmartProduct() : null;
   if (smartProduct && slot) {
     if (smartProduct.image) slot.image_url = smartProduct.image;
     if (smartProduct.title) {

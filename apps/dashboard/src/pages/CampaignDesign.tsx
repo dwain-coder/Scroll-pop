@@ -736,7 +736,22 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     if (t) {
       if (t.deviceTargeting && t.deviceTargeting !== 'all') targetingList.push({ kind: 'device', operator: 'include', value: { device: t.deviceTargeting } });
       if (t.newVisitorOnly) targetingList.push({ kind: 'returning_visitor', operator: 'include', value: { returning: false } });
-      if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') targetingList.push({ kind: 'url_contains', operator: 'include', value: { pattern: t.pageTargeting.trim() } });
+      // Page targeting: the advanced multi-rule builder (pageTargetingRules) supersedes the
+      // single legacy `pageTargeting` field. Map each rule to a real targeting row so the
+      // snippet actually enforces them (previously they were only stored in config.uiTriggers
+      // and never written here, so they had no runtime effect).
+      const pageRules = t.pageTargetingRules ?? [];
+      if (pageRules.length > 0) {
+        pageRules.forEach((r) => {
+          const v = (r.value ?? '').trim();
+          if (!v) return;
+          const kind = r.matchType === 'exact' ? 'url_exact' : r.matchType === 'regex' ? 'url_regex' : 'url_contains';
+          const value = kind === 'url_exact' ? { url: v } : { pattern: v };
+          targetingList.push({ kind, operator: r.operator === 'exclude' ? 'exclude' : 'include', value });
+        });
+      } else if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') {
+        targetingList.push({ kind: 'url_contains', operator: 'include', value: { pattern: t.pageTargeting.trim() } });
+      }
       if (t.geoTargeting && t.geoTargeting !== 'All Countries') targetingList.push({ kind: 'geo', operator: 'include', value: { country: t.geoTargeting } });
       if (t.sessionPageCount > 0) targetingList.push({ kind: 'session_page_views', operator: 'include', value: { count: t.sessionPageCount } });
       if (t.utmValue && t.utmValue.trim() !== '') targetingList.push({ kind: 'utm', operator: 'include', value: { param: t.utmParam || 'utm_source', value: t.utmValue.trim() } });

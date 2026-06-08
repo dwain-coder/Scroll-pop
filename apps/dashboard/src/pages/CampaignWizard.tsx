@@ -640,7 +640,20 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     if (t) {
       if (t.deviceTargeting && t.deviceTargeting !== 'all') targeting.push({ kind: 'device', operator: 'include', value: { device: t.deviceTargeting } });
       if (t.newVisitorOnly) targeting.push({ kind: 'returning_visitor', operator: 'include', value: { returning: false } });
-      if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') targeting.push({ kind: 'url_contains', operator: 'include', value: { pattern: t.pageTargeting.trim() } });
+      // Advanced multi-rule page targeting supersedes the single legacy field — map each rule
+      // to a real targeting row so the snippet enforces it (parity with the visual designer).
+      const pageRules = t.pageTargetingRules ?? [];
+      if (pageRules.length > 0) {
+        pageRules.forEach((r) => {
+          const v = (r.value ?? '').trim();
+          if (!v) return;
+          const kind = r.matchType === 'exact' ? 'url_exact' : r.matchType === 'regex' ? 'url_regex' : 'url_contains';
+          const value = kind === 'url_exact' ? { url: v } : { pattern: v };
+          targeting.push({ kind, operator: r.operator === 'exclude' ? 'exclude' : 'include', value });
+        });
+      } else if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') {
+        targeting.push({ kind: 'url_contains', operator: 'include', value: { pattern: t.pageTargeting.trim() } });
+      }
     }
     return { triggers, frequency, targeting };
   };
@@ -686,6 +699,15 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
           designKind = mainStep.popupType || 'modal';
           designConfig = {
             steps: campaign.steps,
+            // Authoritative editor snapshot for restoring advanced trigger/targeting state
+            // (page-rule builder, Smart Product Match, schedule) — parity with the visual
+            // designer's mapCampaignToDesign. Without this, reopening a wizard-saved campaign
+            // in the designer reset those fields to defaults.
+            uiTriggers: campaign.triggers,
+            schedule: {
+              startsAt: campaign.triggers.startsAt || '',
+              endsAt: campaign.triggers.endsAt || '',
+            },
             backgroundColor: mainStep.backgroundColor,
             borderRadius: mainStep.borderRadius,
             borderColor: mainStep.borderColor,
