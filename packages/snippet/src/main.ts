@@ -932,89 +932,13 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   }
 
   // ─── Element mode: render the builder's positioned elements ─────────────────
-  if (elementMode) {
-    htmlChunks.push(`<div class="popup-inner" id="popup-view-main" style="padding:0;position:relative;height:${cssNum(mainStep.height, 520)}px;display:block;">`);
-    htmlChunks.push(buildElementsHTML(mainStep, design, slot, smartProduct));
-    htmlChunks.push('</div>');
-  } else {
-
-  // Inner Content
-  htmlChunks.push('<div class="popup-inner" id="popup-view-main">');
-
-  htmlChunks.push('<h2 class="headline">');
-  htmlChunks.push(escapeHtml(injectMacros(design.headline || '')));
-  htmlChunks.push('</h2>');
-
-  if (design.subheadline) {
-    htmlChunks.push('<p class="subheadline">');
-    htmlChunks.push(escapeHtml(injectMacros(design.subheadline)));
-    htmlChunks.push('</p>');
-  }
-
-  if (design.bodyText) {
-    htmlChunks.push('<p class="body-text">');
-    htmlChunks.push(escapeHtml(injectMacros(design.bodyText)));
-    htmlChunks.push('</p>');
-  }
-
-  // Render product image for standard templates if present
-  if (slot?.image_url) {
-    htmlChunks.push('<img class="product-image" src="');
-    htmlChunks.push(escapeHtml(slot.image_url));
-    htmlChunks.push('" alt="');
-    htmlChunks.push(escapeHtml(slot.product_name ?? ''));
-    htmlChunks.push('" loading="lazy">');
-  }
-
-  // Render email input field for lead capture templates (anything not stickybar)
-  const showEmailInput = design.position !== 'top' && design.position !== 'bottom' && design.headline !== 'Cookie Consent Notice 🍪';
-  if (showEmailInput) {
-    htmlChunks.push('<div style="width: 100%; display: flex; flex-direction: column; gap: 8px;">');
-    htmlChunks.push('<input type="email" class="email-input" id="email-input" placeholder="Enter your email for active coupon key..." required>');
-    htmlChunks.push('</div>');
-  }
-
-  if (slot) {
-    const btnText = slot.cta_text || design.ctaText;
-
-    if (showEmailInput) {
-      // Lead-capture submit button
-      htmlChunks.push('<button class="cta-btn" id="cta-submit-btn">');
-      htmlChunks.push(escapeHtml(btnText));
-      htmlChunks.push('</button>');
-    } else {
-      const trackerUrl = slot.click_tracker_url || slot.product_url;
-      // Plain Clickout affiliate button
-      if (design.ctaStyle === 'button') {
-        htmlChunks.push('<a class="cta-btn" href="');
-        htmlChunks.push(escapeHtml(safeHref(trackerUrl)));
-        htmlChunks.push('" target="_blank" rel="noopener" id="cta-link">');
-        htmlChunks.push(escapeHtml(btnText));
-        htmlChunks.push('</a>');
-      } else {
-        htmlChunks.push('<a class="cta-link" href="');
-        htmlChunks.push(escapeHtml(safeHref(trackerUrl)));
-        htmlChunks.push('" target="_blank" rel="noopener" id="cta-link">');
-        htmlChunks.push(escapeHtml(btnText));
-        htmlChunks.push('</a>');
-      }
-    }
-  }
-
-  if (design.showDismissText && design.dismissText) {
-    htmlChunks.push('<p class="dismiss-text" id="dismiss-text">');
-    htmlChunks.push(escapeHtml(injectMacros(design.dismissText)));
-    htmlChunks.push('</p>');
-  }
-
-  // Plan-enforced: Free always shows the badge, paid plans never do (ignores the
-  // per-design flag so free users can't remove it and paid users never see it).
-  if (sitePlan === 'free') {
-    htmlChunks.push('<p class="powered-by">Powered by ScrollPop</p>');
-  }
-
-  htmlChunks.push('</div>'); // End popup-view-main
-  } // end non-element (flat-field) layout
+  // Element render — the only mode now. The legacy flat-field layout (headline/subheadline/
+  // email/CTA assembled from flat design fields) was removed: every design the builder produces
+  // is element-mode (verified across all live campaigns) and spin is delegated earlier. The shared
+  // wiring below (close/CTA/email-submit/success) hooks the same element IDs from buildElementsHTML.
+  htmlChunks.push(`<div class="popup-inner" id="popup-view-main" style="padding:0;position:relative;height:${cssNum(mainStep?.height, 520)}px;display:block;">`);
+  if (elementMode) htmlChunks.push(buildElementsHTML(mainStep, design, slot, smartProduct));
+  htmlChunks.push('</div>');
   htmlChunks.push('</div>'); // End popup
 
   const teaserStep = getStep('teaser');
