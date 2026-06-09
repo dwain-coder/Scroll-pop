@@ -7,7 +7,44 @@
 > **P3-2 complete**: dashboard at 0 ESLint warnings + 0 TypeScript errors (full strict). Dormant keys (Sentry/PostHog/Resend) activated.
 > **June 7 security code review (CR-01→08) complete** — 8 findings fixed, no backdoors found.
 > **June 8:** deploy pipeline fixed (pushes now auto-deploy), end-to-end lead capture verified live, DNT→GPC, marketing-consent checkbox, modal-backdrop fix, manual snippet verify, **multi-country geo (US+JP)**, keyboard element nudging.
-> **June 9:** live Shopify/WordPress debugging — fixed **host `display:none`** (theme hid the popup), **leads on `email_capture`** (origin gate dropped conversions on custom domains), **`/spin.js` 404** (not on R2), **custom-domain analytics** (`sites.custom_domain`), **heading WYSIWYG** (editor lied about alignment), center-modal positioning, custom Success screen, `/e` CORS. Plus **recurrence frequency model** (max displays + cooldown + show-after-convert) and snippet **refactor** (removed dead flat-render path −370B; **per-chunk CI budgets**). Open: continue lazy-chunk extraction (Journey/Targeting), popup sequences, legal review (CCPA+APPI).
+> **June 9:** live Shopify/WordPress debugging — fixed **host `display:none`** (theme hid the popup), **leads on `email_capture`** (origin gate dropped conversions on custom domains), **`/spin.js` 404** (not on R2), **custom-domain analytics** (`sites.custom_domain`), **heading WYSIWYG** (editor lied about alignment), center-modal positioning, custom Success screen, `/e` CORS. Plus **recurrence frequency model** (max displays + cooldown + show-after-convert) and snippet **refactor** (removed dead flat-render path −370B; **per-chunk CI budgets**).
+> **June 9 (cont.):** **Agency SaaS layer** shipped — **client workspaces** (CRUD API + top-nav switcher + per-client site filtering/assignment) and **coupled-login team invites** (owner invites by verified email → employee accepts → shares the agency's data; Novatise `@novatise.com` domain auto-join untouched), all **agency-plan + owner gated**. Plus **`/e` undercount fix** (honour `sendBeacon()`'s `false` return → keepalive `fetch` fallback for Firefox-ETP/strict-privacy visitors), **ScrollPop Creatives thumbnail picker** in the designer, **Simulate preview** top-aligned + height-capped, **deleted-campaign funnel exclusion**, and **`trigger_fired`** funnel tracking. Open: continue lazy-chunk extraction (Journey/Targeting), popup sequences, legal review (CCPA+APPI).
+
+---
+
+## 📅 June 9, 2026 (cont.) — Agency SaaS Layer + Analytics/Designer Polish
+
+**Built the agency multi-tenant layer (client workspaces + coupled-login team invites), fixed the analytics undercount at its real root cause, and shipped the Creatives picker + Simulate-preview polish.**
+
+### Agency SaaS layer (new feature — beyond the original 54-item audit)
+Model: an **agency-plan** tenant is a workspace that holds multiple **client** sub-accounts; the operator switches the active client from the top nav and the workspace re-scopes. **Coupled logins:** the agency owner invites employees by verified email; on accept they join the *same* tenant and share all its data. **Novatise** stays a super-admin agency — its `@novatise.com` domain auto-join is untouched; Jon (owner) can additionally invite outside people, and Jon + the owner see the same data.
+
+| Step | Commit | What |
+|---|---|---|
+| 1 — Schema foundation | `e6bffe8` | `clients` table (tenant-scoped, RLS) + `sites.client_id`; SCHEMA_VERSION →16. |
+| 2 — Clients CRUD API | `9b851bc` | `routes/clients.ts` GET (with per-client site counts) / POST / PATCH / DELETE (soft-delete + unassign sites); agency-plan + owner/admin gated. `sites` PATCH accepts `clientId`; `GET /sites?clientId=` filter. |
+| 3 — Client switcher | `538c4cb` | `useClients`/`useActiveClient` hooks; `ClientSwitcher` in the top nav (agency-only) with select / All-clients / inline create / delete; Sites page filters by active client, shows client chips, assigns via Edit dialog, auto-assigns new sites to the active client. |
+| 4 — Team invites (backend) | `6a8e01d` | `team_invites` table + migration (SCHEMA_VERSION →17); `routes/team.ts` (members + invites list, invite, revoke, remove-member, `GET /team/pending`, accept, decline). **Accept verifies the invite email == the accepting user's verified Clerk primary email (fails closed).** `tenant-context` routes accepted agency members to the shared tenant (coupled login). |
+| 4–5 — Team UI + gating | `5c10f33` | `pages/Team.tsx` (owner invites by email, lists members/pending, revoke/remove; non-agency sees an upgrade gate); `PendingInvites` banner (any user with pending invites accepts → joins + reload, or declines); **Team** nav item shown only on the agency plan. |
+
+### Other fixes shipped
+| Item | Commit | What |
+|---|---|---|
+| **`/e` analytics undercount** | `ef919d2` | Real root cause: `navigator.sendBeacon()` **returns `false`** when Firefox-ETP / strict-privacy refuses to queue a third-party beacon — the old code ignored it and never fell back, silently losing the event. Now: honour the `false` return → keepalive `fetch` (`credentials:'omit'`, `text/plain` so no preflight). Snippet rebuilt; **gzip 10179/10240**. (Supersedes the earlier `966288b` `text/plain` fetch-fallback fix.) |
+| **ScrollPop Creatives picker** | `de8be27` (+ list endpoint `72b137e`) | Thumbnail grid in the designer (under *Image Source URL* for image elements) that fetches `GET /creatives` from the edge worker (R2, CORS `*`); clicking a tile writes `cdn.scrollpop.online/creatives/<name>` into the element. Hidden if the library is empty/unreachable (manual URL still works). |
+| **Simulate preview** | `de8be27` | Modal popups now **top-aligned** (were vertically centered → looked like "50% scroll"); backdrop scrolls; popup card **capped to the frame** (`maxHeight` + internal scroll) so tall designs don't clip/overflow. |
+| Deleted-campaign funnel exclusion | `43a06e4` | Aggregate funnel excludes soft-deleted campaigns (campaignId drill-down exempt). |
+| `trigger_fired` funnel tracking | `30f4188` | Snippet beacons `trigger_fired` once-per-load before the frequency check so the funnel's first stage tracks. |
+| Compact full-width Sites | `a72715d` | Narrow clickable site list + thin add banner + modal-only "new site" config. |
+
+### Deploy notes
+- API changes (clients + team routes, SCHEMA_VERSION →17) need a **Render redeploy**; the `ensure-clients` + `ensure-team-invites` DDL is idempotent and runs on first boot of the new version (gated by Redis flag `sp_schema_v17`). Deploying the latest commit is sufficient — no cache clear needed.
+- Snippet (`/e` fix) + worker (`/creatives`) deploy via CI → R2.
+- All commits pushed to **origin** + **dwain-coder**.
+
+### Open follow-ups (new)
+- Client-scoping currently re-scopes **Sites** by active client; extend the same `clientId` key to **Campaigns / Analytics / Leads** filtering for a fuller per-client workspace.
+- Owner verify post-deploy: invite an outside employee → accept flow → confirm shared data; create a client + assign sites → switcher filters correctly.
 
 ---
 

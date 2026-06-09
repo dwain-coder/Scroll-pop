@@ -23,6 +23,39 @@
 
 ---
 
+## 🏢 June 9, 2026 (cont.) — Agency SaaS Layer + Analytics/Designer Polish
+
+> New feature work beyond the original 54-item audit. Built the agency multi-tenant layer (client workspaces + coupled-login team invites), fixed the `/e` analytics undercount at its true root cause, and shipped the Creatives picker + Simulate-preview polish. All commits on **origin** + **dwain-coder**.
+
+**Agency model.** An **agency-plan** tenant holds multiple **client** sub-accounts; the operator switches the active client in the top nav and the workspace re-scopes. **Coupled logins:** the agency owner invites employees by *verified* email; on accept they join the same tenant and share its data. **Novatise** stays super-admin — its `@novatise.com` domain auto-join is untouched; Jon (owner) can also invite outside people, and Jon + owner see the same data. All management is **agency-plan + owner/admin gated**.
+
+### Shipped
+| Step | Commit | What |
+|---|---|---|
+| AG-1 Schema foundation | `e6bffe8` | `clients` table (tenant-scoped + RLS) + `sites.client_id`; SCHEMA_VERSION →16. |
+| AG-2 Clients CRUD API | `9b851bc` | `routes/clients.ts` GET (per-client site counts) / POST / PATCH / DELETE (soft-delete + unassign sites); `sites` PATCH `clientId`, `GET /sites?clientId=` filter. |
+| AG-3 Client switcher | `538c4cb` | `useClients`/`useActiveClient`; top-nav `ClientSwitcher` (agency-only): select / All-clients / inline create / delete. Sites page filters by active client + chips + Edit-dialog assignment + auto-assign new sites. |
+| AG-4 Team invites (API) | `6a8e01d` | `team_invites` table + migration (SCHEMA_VERSION →17); `routes/team.ts` (members+invites, invite, revoke, remove-member, `/team/pending`, accept, decline). Accept verifies invite email == accepting user's **verified Clerk primary email** (fails closed). `tenant-context` routes accepted members to the shared agency tenant. |
+| AG-5 Team UI + gating | `5c10f33` | `pages/Team.tsx` (invite, members/pending lists, revoke/remove; non-agency upgrade gate); `PendingInvites` banner (accept → join + reload, or decline); Team nav agency-only. |
+| `/e` undercount | `ef919d2` | **True root cause:** `sendBeacon()` returns `false` under Firefox-ETP/strict-privacy; old code ignored it → event lost. Now falls back to keepalive `fetch` (`credentials:'omit'`, `text/plain`). gzip **10179/10240**. |
+| Creatives picker | `de8be27`, `72b137e` | Designer thumbnail grid fetches `GET /creatives` (edge worker, R2, CORS `*`); click sets `cdn.scrollpop.online/creatives/<name>`. Hidden if empty/unreachable. |
+| Simulate preview | `de8be27` | Modal popups top-aligned (was centered → "50% scroll"); backdrop scrolls; card capped to frame (`maxHeight` + internal scroll). |
+| Deleted-campaign funnel exclusion | `43a06e4` | Aggregate funnel excludes soft-deleted campaigns (drill-down exempt). |
+| `trigger_fired` tracking | `30f4188` | Snippet beacons `trigger_fired` once-per-load before the frequency check. |
+| Compact Sites redesign | `a72715d` | Full-width, narrow clickable list, thin add banner, modal-only add. |
+
+### Open follow-ups
+| ID | Status | Item |
+|---|---|---|
+| AG-6 | ⬜ New | Extend client-scoping beyond Sites: filter **Campaigns / Analytics / Leads** by the active `clientId` (sites→campaigns chain) for a full per-client workspace. |
+| AG-7 | ⬜ Verify | Post-deploy owner verification: outside-employee invite→accept→shared-data; create client + assign sites → switcher filters correctly. |
+
+### Deploy / verify
+- API: **Render redeploy of the latest commit** (SCHEMA_VERSION →17; `ensure-clients` + `ensure-team-invites` idempotent on first boot, gated by Redis `sp_schema_v17`). No cache clear needed.
+- Snippet (`/e`) + worker (`/creatives`) via CI → R2.
+
+---
+
 ## 🚀 June 9, 2026 — Live Shopify/WordPress Debugging, Custom-Domain Analytics, Recurrence & Snippet Refactor
 
 > Real-install debugging on Shopify (sakananet.com) + WordPress (gourmet-meat.com): popup not showing, leads not saving, spin not rendering. All root-caused and fixed; then shipped a recurrence frequency model and began the snippet lazy-chunk refactor.
