@@ -2,6 +2,7 @@ name = "scrollpop-worker"
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
+account_id = "ab2fb70a30155f9cd3015fc03c4796e2"
 
 # ── Non-secret vars (safe to commit) ──────────────────────────────────────────
 [vars]

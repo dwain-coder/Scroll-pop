@@ -85,8 +85,10 @@ export default Sentry.withSentry(
     // GET /creatives/<name> — non-editable "ScrollPop Creatives" images served from R2.
     // Used by the blank image template (full-bleed creative + transparent CTA + X).
     if (request.method === 'GET' && url.pathname.startsWith('/creatives/')) {
-      // Sanitize the name to a flat allowlist (no path traversal, no subfolders).
-      const name = url.pathname.slice('/creatives/'.length).replace(/[^a-zA-Z0-9._-]/g, '');
+      // Decode percent-encoding first (spaces arrive as %20), then sanitize to a flat allowlist
+      // (no path traversal, no subfolders). Spaces are allowed — filenames may contain them.
+      const rawName = decodeURIComponent(url.pathname.slice('/creatives/'.length));
+      const name = rawName.replace(/[^a-zA-Z0-9._\- ]/g, '');
       if (name && env.SNIPPET_BUCKET) {
         const obj = await env.SNIPPET_BUCKET.get(`creatives/${name}`);
         if (obj) {

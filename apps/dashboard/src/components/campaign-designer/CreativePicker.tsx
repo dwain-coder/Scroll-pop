@@ -6,7 +6,7 @@ import { Loader2, Check, ImageOff } from 'lucide-react';
 // so the URL we store here resolves identically on customer sites. CORS is "*" on the worker.
 const CDN = (import.meta.env.VITE_CDN_URL as string | undefined)?.replace(/\/$/, '') || 'https://cdn.scrollpop.online';
 
-const creativeUrl = (name: string) => `${CDN}/creatives/${name}`;
+const creativeUrl = (name: string) => `${CDN}/creatives/${encodeURIComponent(name)}`;
 
 /**
  * Thumbnail grid for picking a ScrollPop Creative image. Clicking a tile writes its full URL
