@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Plus, Copy, Check, Trash2, Edit, Lock, X, Link2, Code2,
+  Plus, Copy, Check, Trash2, Edit, Lock, X, Code2,
   ShoppingBag, Globe, AlertCircle, CheckCircle2,
   Download, RefreshCw, ExternalLink, Wifi, WifiOff,
 } from 'lucide-react';
@@ -402,7 +402,6 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [editSite, setEditSite] = React.useState({ id: '', name: '', platform: 'html' });
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
-  const [connectUrl, setConnectUrl] = React.useState('');
 
   // Detect Shopify OAuth success redirect
   React.useEffect(() => {
@@ -530,15 +529,6 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
 </script>`;
   };
 
-  const handleConnectQuick = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!connectUrl.trim()) return;
-    const domain = connectUrl.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
-    setNewSite({ name: domain, domain, platform: 'html' });
-    setConnectUrl('');
-    setIsAddOpen(true);
-  };
-
   const liveSites = sitesData?.data?.filter((s) => (s as SiteRecord).verifiedAt)?.length ?? 0;
 
   // Available tabs for a given site
@@ -555,7 +545,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   };
 
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div style={{ width: '100%' }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -597,17 +587,19 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
       {/* Master-detail: site list (left) + setup/detail (right) */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, alignItems: 'flex-start' }}>
       {sitesData?.data && sitesData.data.length > 0 ? (
-        <div style={{ width: 340, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+        <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
           {(sitesData.data as SiteRecord[]).map((site) => (
-            <div key={site.id} style={{
-              background: 'var(--bg-surface)',
+            <div key={site.id}
+              onClick={() => setSelectedSite(site)}
+              style={{
+              background: selectedSite?.id === site.id ? 'var(--bg-raised)' : 'var(--bg-surface)',
               border: `1px solid ${selectedSite?.id === site.id ? 'var(--accent-400)' : 'var(--border-subtle)'}`,
               borderRadius: 8,
-              padding: 20,
+              padding: '11px 13px',
               display: 'flex',
               flexDirection: 'column',
-              gap: 16,
-              cursor: 'default',
+              gap: 6,
+              cursor: 'pointer',
             }}>
               {/* Status + domain */}
               <div>
@@ -643,75 +635,18 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                 </div>
               </div>
 
-              {/* Stats */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div style={{ background: 'var(--bg-raised)', borderRadius: 6, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Campaigns</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 500, color: 'var(--text-primary)' }}>
-                    {site.campaignCount ?? 0}
-                  </div>
-                </div>
-                <div style={{ background: 'var(--bg-raised)', borderRadius: 6, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Views</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 500, color: 'var(--text-primary)' }}>
-                    {site.totalViews
-                      ? site.totalViews >= 1000 ? `${(site.totalViews / 1000).toFixed(1)}k` : site.totalViews
-                      : '0'}
-                  </div>
-                </div>
+              {/* Compact meta — full details live in the right panel */}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {site.campaignCount ?? 0} campaign{(site.campaignCount ?? 0) === 1 ? '' : 's'} · {(site.totalViews ?? 0) >= 1000 ? `${((site.totalViews ?? 0) / 1000).toFixed(1)}k` : (site.totalViews ?? 0)} views
               </div>
-
-              {/* Public key */}
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>PUBLIC KEY</div>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  background: 'var(--bg-raised)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 6,
-                  padding: '6px 10px',
-                }}>
-                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-500)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {site.publicKey ?? 'sp_pub_...'}
-                  </code>
-                  <button
-                    className="btn btn-icon"
-                    style={{ width: 24, height: 24 }}
-                    onClick={() => copyToClipboard(site.publicKey ?? '', `key-${site.id}`)}
-                    title="Copy"
-                  >
-                    {copiedKey === `key-${site.id}`
-                      ? <Check size={12} style={{ color: 'var(--status-success)' }} />
-                      : <Copy size={12} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => {
-                    setSelectedSite(selectedSite?.id === site.id ? null : site);
-                  }}
-                  className={`btn ${selectedSite?.id === site.id ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}
-                >
-                  {selectedSite?.id === site.id
-                    ? 'Close Setup'
-                    : site.verifiedAt ? 'Manage Site' : 'Complete Setup'}
-                </button>
-              </div>
-
               {!site.verifiedAt && site.platform !== 'shopify' && site.platform !== 'wordpress' && (
                 <button
-                  onClick={() => handleVerify(site.id)}
+                  onClick={(e) => { e.stopPropagation(); handleVerify(site.id); }}
                   disabled={verifyingId === site.id}
                   className="btn btn-ghost btn-sm"
-                  style={{ color: 'var(--status-warning)', justifyContent: 'center', width: '100%' }}
+                  style={{ color: 'var(--status-warning)', justifyContent: 'flex-start', padding: 0, fontSize: 11 }}
                 >
-                  {verifyingId === site.id ? 'Verifying...' : 'Verify connection'}
+                  {verifyingId === site.id ? 'Verifying…' : 'Verify connection'}
                 </button>
               )}
             </div>
@@ -920,59 +855,6 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
       </div>
       </div>
 
-      {/* Connect a new site inline form */}
-      <div style={{
-        border: '1px dashed var(--border-default)',
-        borderRadius: 8,
-        padding: 32,
-        textAlign: 'center',
-        marginBottom: 24,
-      }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 8,
-          background: 'var(--bg-raised)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 16px',
-          color: 'var(--text-muted)',
-        }}>
-          <Link2 size={20} />
-        </div>
-        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 6px', color: 'var(--text-primary)' }}>
-          Connect a new site
-        </h3>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 20px', maxWidth: 360, marginInline: 'auto' }}>
-          Ready to track conversions? Add your domain and we'll generate a unique tracking snippet.
-        </p>
-        <form onSubmit={handleConnectQuick} style={{ display: 'flex', gap: 8, justifyContent: 'center', maxWidth: 400, margin: '0 auto' }}>
-          <input
-            type="text"
-            className="input"
-            placeholder="https://example.com"
-            value={connectUrl}
-            onChange={(e) => setConnectUrl(e.target.value)}
-            style={{ flex: 1, maxWidth: 280 }}
-          />
-          <button type="submit" className="btn btn-primary">Connect</button>
-        </form>
-
-        {/* Quick platform buttons */}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16 }}>
-          <button
-            onClick={() => { setNewSite({ name: '', domain: '', platform: 'shopify' }); setIsAddOpen(true); }}
-            className="btn btn-secondary btn-sm"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-          >
-            <ShoppingBag size={12} style={{ color: '#96bf48' }} /> Connect Shopify
-          </button>
-          <button
-            onClick={() => { setNewSite({ name: '', domain: '', platform: 'wordpress' }); setIsAddOpen(true); }}
-            className="btn btn-secondary btn-sm"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-          >
-            <Globe size={12} style={{ color: '#21759b' }} /> Connect WordPress
-          </button>
-        </div>
-      </div>
 
       {/* Add Site Modal */}
       {isAddOpen && (
