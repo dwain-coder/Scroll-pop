@@ -362,6 +362,7 @@ function evaluateRule(rule: TargetingRule): boolean {
 
 function registerCampaignTriggers(campaign: CampaignConfig): void {
   let fired = false;
+  let triggerBeaconed = false;
 
   // fire() is called by a trigger with its metadata so we can beacon it
   const fire = (triggerMeta?: { triggerType: string; scrollPct?: number }) => {
@@ -372,6 +373,13 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
     if (timeOnPage < 2000) {
       console.log('[ScrollPop] Page load <2s — skipping trigger.');
       return;
+    }
+
+    // Funnel: record that a trigger condition was met — once per load, even if the frequency
+    // cap then blocks display — so "Trigger Fired" ≥ "Popup Shown" in analytics.
+    if (!triggerBeaconed) {
+      triggerBeaconed = true;
+      beaconEvent(campaign, 'trigger_fired', undefined, { triggerType: triggerMeta?.triggerType ?? 'unknown' });
     }
 
     if (!checkFrequencyCap(campaign.id, campaign.frequency)) {
