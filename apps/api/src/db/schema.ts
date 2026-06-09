@@ -243,6 +243,26 @@ export const clients = pgTable('clients', {
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 
+// ─── Team Invites (agency coupled-login layer) ──────────────────────────────────
+// An agency owner invites an employee by verified email. On accept, the employee gets a
+// tenant_members row on the agency tenant and shares its data (coupled login). Novatise's
+// @novatise.com domain auto-join is unaffected — invites are an *additional* path.
+
+export const teamInvites = pgTable('team_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),                 // invited email, lowercased
+  role: roleEnum('role').notNull().default('editor'),
+  status: text('status').notNull().default('pending'), // pending | accepted | revoked
+  invitedByUserId: uuid('invited_by_user_id'),
+  acceptedUserId: uuid('accepted_user_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`NOW()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+});
+
 // ─── Shopify Installations ────────────────────────────────────────────────────
 
 export const shopifyInstallations = pgTable('shopify_installations', {

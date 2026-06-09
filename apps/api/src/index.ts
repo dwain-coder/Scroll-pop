@@ -16,6 +16,7 @@ import { ensureLeadsSchema } from './db/ensure-leads.js';
 import { ensureVariantsSchema } from './db/ensure-variants.js';
 import { ensureCouponsSchema } from './db/ensure-coupons.js';
 import { ensureClientsSchema } from './db/ensure-clients.js';
+import { ensureTeamInvitesSchema } from './db/ensure-team-invites.js';
 import { ensureWebhooksSchema } from './db/ensure-webhooks.js';
 import { ensureIntegrationsSchema } from './db/ensure-integrations.js';
 import { startDeletedDataPurge } from './db/purge-deleted.js';
@@ -25,6 +26,7 @@ import { eq, and, isNull, sql as drizzleSql } from 'drizzle-orm';
 // Routes
 import { siteRoutes } from './routes/sites.js';
 import { clientRoutes } from './routes/clients.js';
+import { teamRoutes } from './routes/team.js';
 import { campaignRoutes } from './routes/campaigns.js';
 import { designRoutes } from './routes/designs.js';
 import { triggerRoutes } from './routes/triggers.js';
@@ -148,6 +150,7 @@ async function bootstrap() {
   await app.register(meRoutes, { prefix: '/api/v1' });
   await app.register(siteRoutes, { prefix: '/api/v1' });
   await app.register(clientRoutes, { prefix: '/api/v1' });
+  await app.register(teamRoutes, { prefix: '/api/v1' });
   await app.register(campaignRoutes, { prefix: '/api/v1' });
   await app.register(designRoutes, { prefix: '/api/v1' });
   await app.register(triggerRoutes, { prefix: '/api/v1' });
@@ -950,7 +953,7 @@ async function bootstrap() {
   // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
   // a Redis flag after first successful run so warm restarts in the same deployment skip
   // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
-  const SCHEMA_VERSION = '16'; // v16: agency clients table + sites.client_id (multi-client layer)
+  const SCHEMA_VERSION = '17'; // v17: agency team_invites table (coupled-login layer)
   const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)
@@ -983,6 +986,8 @@ async function bootstrap() {
     await ensureIntegrationsSchema(app.log);
     // Ensure agency clients table + sites.client_id (multi-client layer).
     await ensureClientsSchema(app.log);
+    // Ensure agency team_invites table (coupled-login layer).
+    await ensureTeamInvitesSchema(app.log);
 
     if (redis) {
       // 24h TTL — long enough to cover normal redeploys, short enough that a schema version

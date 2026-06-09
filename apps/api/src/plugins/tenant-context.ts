@@ -304,6 +304,27 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
       return;
     }
 
+    // ─── Invited employee → shared agency tenant (coupled login) ──────────────
+    // If this user was added (via an accepted team invite) to an agency-plan tenant, that
+    // shared workspace becomes their active tenant so the whole team sees the same data.
+    // Prefer an owned tenant over a guest membership when the user belongs to several.
+    const agencyMemberships = await db
+      .select({ tenantId: tenantMembers.tenantId, role: tenantMembers.role })
+      .from(tenantMembers)
+      .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+      .where(and(
+        eq(tenantMembers.userId, user.id),
+        eq(tenants.plan, 'agency'),
+        isNull(tenants.deletedAt),
+      ));
+    if (agencyMemberships.length > 0) {
+      const preferred = agencyMemberships.find((m) => m.role === 'owner') ?? agencyMemberships[0]!;
+      request.tenantId = preferred.tenantId;
+      request.userId = user.id;
+      request.memberRole = preferred.role;
+      return;
+    }
+
     // ─── Regular personal tenant ──────────────────────────────────────────────
     let tenant = await db.query.tenants.findFirst({
       where: and(eq(tenants.clerkOrgId, personalOrgKey), isNull(tenants.deletedAt)),
