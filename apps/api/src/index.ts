@@ -24,6 +24,7 @@ import { eq, and, isNull, sql as drizzleSql } from 'drizzle-orm';
 
 // Routes
 import { siteRoutes } from './routes/sites.js';
+import { clientRoutes } from './routes/clients.js';
 import { campaignRoutes } from './routes/campaigns.js';
 import { designRoutes } from './routes/designs.js';
 import { triggerRoutes } from './routes/triggers.js';
@@ -146,6 +147,7 @@ async function bootstrap() {
   // Authenticated routes
   await app.register(meRoutes, { prefix: '/api/v1' });
   await app.register(siteRoutes, { prefix: '/api/v1' });
+  await app.register(clientRoutes, { prefix: '/api/v1' });
   await app.register(campaignRoutes, { prefix: '/api/v1' });
   await app.register(designRoutes, { prefix: '/api/v1' });
   await app.register(triggerRoutes, { prefix: '/api/v1' });

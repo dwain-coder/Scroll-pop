@@ -16,13 +16,20 @@ const UpdateSiteBody = z.object({
   wpSiteUrl: z.string().url().optional(),
   // Storefront/custom domain the snippet is served on (bare host or URL). Empty string clears it.
   customDomain: z.string().max(253).optional(),
+  // Assign the site to an agency client workspace (null = agency-level / unassign).
+  clientId: z.string().uuid().nullable().optional(),
 });
 
 export const siteRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/v1/sites
-  fastify.get('/sites', async (request, reply) => {
+  fastify.get<{ Querystring: { clientId?: string } }>('/sites', async (request, reply) => {
+    const { clientId } = request.query;
     const tenantSites = await db.query.sites.findMany({
-      where: and(eq(sites.tenantId, request.tenantId), isNull(sites.deletedAt)),
+      where: and(
+        eq(sites.tenantId, request.tenantId),
+        isNull(sites.deletedAt),
+        clientId ? eq(sites.clientId, clientId) : undefined,
+      ),
       orderBy: (s, { desc }) => [desc(s.createdAt)],
     });
 
@@ -136,6 +143,7 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
         ...(body.customDomain !== undefined
           ? { customDomain: body.customDomain.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null }
           : {}),
+        ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(sites.id, request.params.id), eq(sites.tenantId, request.tenantId)))
